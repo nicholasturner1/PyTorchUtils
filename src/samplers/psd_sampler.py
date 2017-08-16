@@ -48,10 +48,12 @@ class Sampler(object):
 
       print(dset_name)
       img = u.read_file(os.path.join(datadir, dset_name + "_img.h5"))      
-      psd = u.read_file(os.path.join(datadir, dset_name + "_psd.h5")).astype("float32")
-      msk = u.read_file(os.path.join(datadir, dset_name + "_bnd.h5")).astype("float32")
+      psd = u.read_file(os.path.join(datadir, dset_name + "_syn.h5")).astype("float32")
+      seg = u.read_file(os.path.join(datadir, dset_name + "_seg.h5"))
 
       img = dp.transform.divideby(img, val=255.0, dtype="float32")
+      psd[psd != 0] = 1 #Binarizing psds
+      msk = (seg == 0).astype("float32") #Boundary mask
 
       vd = dp.VolumeDataset()
       vd.add_raw_data(key="input",      data=img)

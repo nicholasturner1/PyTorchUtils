@@ -30,7 +30,7 @@ params["depth"]        = 4
 params["batch_norm"]   = False
 
 #Training procedure params
-params["lr"]          = 0.0001
+params["lr"]          = 0.00001
 params["max_iter"]    = 1000000
 params["test_intv"]   = 1000
 params["test_iter"]   = 100
@@ -51,14 +51,14 @@ params["val_sets"]     = ["val"]
 
 
 #modules used for record-keeping
-modules_used = [MODEL_FNAME,"models/layers.py",SAMPLER_FNAME, "loss.py"]
+modules_used = [MODEL_FNAME,"layers.py",SAMPLER_FNAME, "loss.py"]
 
 
 #Use-specific Module imports
 import loss
 sampler_module = imp.load_source("Sampler",SAMPLER_FNAME)
 model_module = imp.load_source("Model",MODEL_FNAME)
-Model = mode_module.Model
+Model = model_module.Model
 
 
 def last_iter_from_chkpt(chkpt_fname):
