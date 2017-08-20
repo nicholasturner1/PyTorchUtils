@@ -4,6 +4,7 @@ import os, sys, imp
 import collections
 
 import torch
+from torch.nn import functional as F
 import dataprovider as dp
 
 import forward
@@ -26,10 +27,11 @@ params = {}
 
 #Model params
 params["in_dim"]      = 1
-params["output_spec"] = [("psd_label",1)]# collections.OrderedDict(psd_label=1)
+params["output_spec"] = collections.OrderedDict(psd_label=1)
 params["depth"]       = 4
 params["batch_norm"]  = False
-params["chkpt_fname"]  = CHKPT_FNAME
+params["activation"]  = F.sigmoid
+params["chkpt_fname"] = CHKPT_FNAME
 
 #IO/Record params
 params["expt_dir"]    = "experiments/{}".format(EXPT_NAME)
@@ -112,7 +114,8 @@ def main(**params):
 
         fs = make_forward_scanner(dset, **params)
 
-        output = forward.forward(net, fs, params["scan_spec"])
+        output = forward.forward(net, fs, params["scan_spec"], 
+                                 activation=params["activation"])
 
         save_output(output, dset, iter_num, **params)
 
