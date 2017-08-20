@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
-import os, re
+import os, re, imp, sys
 import shutil
-import sys
-import imp
 
 import torch
 
 import train
-import train_utils as utils
+import utils
 
 
 EXPT_NAME     = sys.argv[1] 
@@ -24,7 +22,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = GPU
 params = dict()
 
 #Model params
-params["in_dimension"] = 1
+params["in_dim"] = 1
 params["output_spec"]  = [("psd_label",1)]
 params["depth"]        = 4
 params["batch_norm"]   = False
@@ -41,18 +39,18 @@ params["chkpt_fname"] = CHKPT_FNAME
 #IO/Record params #SOME HAVE HOOKS TO TRAIN.PY
 params["expt_dir"]   = "experiments/{}".format(EXPT_NAME)
 params["model_dir"]  = os.path.join(params["expt_dir"], "models")
-params["logs_dir"]   = os.path.join(params["expt_dir"], "logs")
+params["log_dir"]    = os.path.join(params["expt_dir"], "logs")
 params["fwd_dir"]    = os.path.join(params["expt_dir"], "forward")
 
 #Sampling params
-params["data_dir"]     = "~/research/datasets/SNEMI3D/"
+params["data_dir"]     = "/usr/people/nturner/research/datasets/SNEMI3D/"
 params["train_sets"]   = ["train"]
-params["val_sets"]     = ["val"]
+params["val_sets"]     = ["roncal_val"]
 
 
 #modules used for record-keeping
-modules_used = [MODEL_FNAME,"layers.py",SAMPLER_FNAME, "loss.py"]
-
+params["modules_used"] = [__file__, MODEL_FNAME, "layers.py", 
+                          SAMPLER_FNAME, "loss.py"]
 
 #Use-specific Module imports
 import loss
@@ -61,60 +59,57 @@ model_module = imp.load_source("Model",MODEL_FNAME)
 Model = model_module.Model
 
 
-def last_iter_from_chkpt(chkpt_fname):
-    basename = os.path.basename(chkpt_fname)
-    return int(re.findall(r"\d+", basename)[0])
 
+def start_training(in_dim, output_spec, depth, batch_norm, chkpt_fname,
+                   lr, train_sets, val_sets, data_dir, **params):
 
-def start_training():
+    net = Model(in_dim, output_spec, depth, bn=batch_norm).cuda()
 
-    net = Model(params["in_dimension"], params["output_spec"], 
-               params["depth"], bn=params["batch_norm"]).cuda()
-
-    if params["chkpt_fname"] is not None:
-        net.load_state_dict(torch.load(params["chkpt_fname"]))
-        last_iter = last_iter_from_chkpt(params["chkpt_fname"])
+    if chkpt_fname is not None:
+        net.load_state_dict(torch.load(chkpt_fname))
+        last_iter = utils.iter_from_chkpt_fname(chkpt_fname)
     else:
         last_iter = 0
 
     loss_fn = loss.BinomialCrossEntropyWithLogits()
 
-    optimizer = torch.optim.Adam( net.parameters(), lr=params["lr"] )
+    optimizer = torch.optim.Adam( net.parameters(), lr=lr )
 
-    train_sampler = utils.AsyncSampler(sampler_module.Sampler(params["data_dir"],
-                                                      dsets=params["train_sets"], 
+    train_sampler = utils.AsyncSampler(sampler_module.Sampler(data_dir,
+                                                      dsets=train_sets, 
                                                       mode="train"))
 
-    val_sampler   = utils.AsyncSampler(sampler_module.Sampler(params["data_dir"], 
-                                                      dsets=params["val_sets"],   
+    val_sampler   = utils.AsyncSampler(sampler_module.Sampler(data_dir, 
+                                                      dsets=val_sets,   
                                                       mode="test"))
 
     train.train(net, loss_fn, optimizer, train_sampler, val_sampler, 
                 last_iter=last_iter, **params)
 
 
-def make_reqd_dirs():
+def make_reqd_dirs(model_dir, log_dir, fwd_dir, **params):
 
-    for d in [params["model_dir"], params["logs_dir"], params["fwd_dir"]]:
+    for d in [model_dir, log_dir, fwd_dir]:
       if not os.path.isdir(d):
         os.makedirs(d)
 
 
-def copy_record_files():
-    """ Keep a copy of the used modules as records """
+def log_modules(modules_used, log_dir, chkpt_fname, **params):
 
-    target = os.path.join(params["logs_dir"], __file__)
-    shutil.copyfile(__file__, target)
-    for f in modules_used:
-        target = os.path.join(params["logs_dir"], os.path.basename(f))
-        shutil.copyfile(f, target)
+    if chkpt_fname is not None:
+      last_iter = utils.iter_from_chkpt_fname(chkpt_fname)
+      utils.log_tagged_modules(modules_used, log_dir, "train", iter_num=iter_num)
+    else:
+      utils.log_tagged_modules(modules_used, log_dir, "train", iter_num=0)
+      
 
+def main(**params):
 
-def main():
+    make_reqd_dirs(**params)
 
-    make_reqd_dirs()
-    copy_record_files()
-    start_training()
+    log_modules(**params)
+
+    start_training(**params)
 
 if __name__ == "__main__":
-    main()
+    main(**params)

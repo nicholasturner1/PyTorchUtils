@@ -15,17 +15,17 @@ import torch
 from torch import autograd
 
 
-import train_utils as utils
+import utils
 
 
 required_params = ["max_iter","test_intv","test_iter",
                    "avgs_intv","chkpt_intv","expt_dir"]
 
 
-def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0, **params):
-    """ Generalized training fn """
+def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
+          **params):
 
-    assert params_defined(params), "Params under-specified"
+    """ Generalized training fn """
 
     #Start stats log
     monitor = utils.LearningMonitor()
@@ -150,9 +150,6 @@ def save_checkpoint(model, monitor, i, base_dir):
     stats_fname = os.path.join(base_dir, "logs", "stats_{}.h5".format(i))
     monitor.save(stats_fname, i)
 
-#=======================================
-# Helper Fns
-#=======================================
 
 def params_defined(params):
     " Checks whether all required parameters have been defined "
