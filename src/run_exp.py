@@ -2,6 +2,7 @@
 
 import os, re, imp, sys
 import shutil
+import collections
 
 import torch
 
@@ -13,7 +14,7 @@ EXPT_NAME     = sys.argv[1]
 GPU           = sys.argv[2]
 SAMPLER_FNAME = sys.argv[3]
 MODEL_FNAME   = sys.argv[4]
-CHKPT_FNAME   = sys.argv[5] if len(sys.argv) > 5 else None
+CHKPT_NUM     = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -23,7 +24,7 @@ params = dict()
 
 #Model params
 params["in_dim"] = 1
-params["output_spec"]  = [("psd_label",1)]
+params["output_spec"]  = collections.OrderedDict(psd_label=1)
 params["depth"]        = 4
 params["batch_norm"]   = False
 
@@ -34,7 +35,7 @@ params["test_intv"]   = 1000
 params["test_iter"]   = 100
 params["avgs_intv"]   = 50
 params["chkpt_intv"]  = 10000
-params["chkpt_fname"] = CHKPT_FNAME
+params["chkpt_num"]   = CHKPT_NUM
 
 #IO/Record params #SOME HAVE HOOKS TO TRAIN.PY
 params["expt_dir"]   = "experiments/{}".format(EXPT_NAME)
@@ -60,16 +61,15 @@ Model = model_module.Model
 
 
 
-def start_training(in_dim, output_spec, depth, batch_norm, chkpt_fname,
-                   lr, train_sets, val_sets, data_dir, **params):
+def start_training(in_dim, output_spec, depth, batch_norm, chkpt_num,
+                   lr, train_sets, val_sets, model_dir, data_dir, log_dir,
+                   **params):
 
     net = Model(in_dim, output_spec, depth, bn=batch_norm).cuda()
+    monitor = utils.LearningMonitor()
 
-    if chkpt_fname is not None:
-        net.load_state_dict(torch.load(chkpt_fname))
-        last_iter = utils.iter_from_chkpt_fname(chkpt_fname)
-    else:
-        last_iter = 0
+    if chkpt_num != 0:
+        utils.load_chkpt(net, monitor, chkpt_num, model_dir, log_dir)
 
     loss_fn = loss.BinomialCrossEntropyWithLogits()
 
@@ -84,7 +84,7 @@ def start_training(in_dim, output_spec, depth, batch_norm, chkpt_fname,
                                                       mode="test"))
 
     train.train(net, loss_fn, optimizer, train_sampler, val_sampler, 
-                last_iter=last_iter, **params)
+                last_iter=chkpt_num, monitor=monitor, **params)
 
 
 def make_reqd_dirs(model_dir, log_dir, fwd_dir, **params):
@@ -92,22 +92,15 @@ def make_reqd_dirs(model_dir, log_dir, fwd_dir, **params):
     for d in [model_dir, log_dir, fwd_dir]:
       if not os.path.isdir(d):
         os.makedirs(d)
-
-
-def log_modules(modules_used, log_dir, chkpt_fname, **params):
-
-    if chkpt_fname is not None:
-      last_iter = utils.iter_from_chkpt_fname(chkpt_fname)
-      utils.log_tagged_modules(modules_used, log_dir, "train", iter_num=iter_num)
-    else:
-      utils.log_tagged_modules(modules_used, log_dir, "train", iter_num=0)
       
 
 def main(**params):
 
     make_reqd_dirs(**params)
 
-    log_modules(**params)
+    utils.log_tagged_modules(params["modules_used"], 
+                             params["log_dir"], "train", 
+                             iter_num=params["chkpt_num"])
 
     start_training(**params)
 

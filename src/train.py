@@ -23,12 +23,14 @@ required_params = ["max_iter","test_intv","test_iter",
 
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
-          **params):
+          monitor=None, **params):
 
     """ Generalized training fn """
 
-    #Start stats log
-    monitor = utils.LearningMonitor()
+    assert params_defined(params), "Params under-specified"
+
+    if monitor is None:
+        monitor = utils.LearningMonitor()
 
     #Determine the names of inputs, labels, masks
     sample_spec = utils.SampleSpec(sampler.get().keys())

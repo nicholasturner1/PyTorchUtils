@@ -32,9 +32,20 @@ def save_chkpt(model, learning_monitor, iter_num, model_dir, log_dir):
     chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(iter_num))
     torch.save(model.state_dict(), chkpt_fname)
 
-    # Save stats
-    stats_fname = os.path.join(log_dir, "stats_{}.h5".format(iter_num))
-    monitor.save(stats_fname, iter_num)
+    # Save learning monitor 
+    lm_fname = os.path.join(log_dir, "stats_{}.h5".format(iter_num))
+    learning_monitor.save(lm_fname, iter_num)
+
+
+def load_chkpt(model, learning_monitor, iter_num, model_dir, log_dir):
+
+    # Load model params
+    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(iter_num))
+    model.load_state_dict(torch.load(chkpt_fname))
+    
+    # Load learning monitor
+    lm_fname = os.path.join(log_dir, "stats{}.h5".format(iter_num))
+    learning_monitor.load(lm_fname)
 
 
 def iter_from_chkpt_fname(chkpt_fname):
