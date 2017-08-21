@@ -19,7 +19,8 @@ import utils
 
 
 required_params = ["max_iter","test_intv","test_iter",
-                   "avgs_intv","chkpt_intv","expt_dir"]
+                   "avgs_intv","chkpt_intv","expt_dir",
+                   "model_dir","log_dir"]
 
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,

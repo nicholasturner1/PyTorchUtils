@@ -62,14 +62,15 @@ Model = model_module.Model
 
 
 def start_training(in_dim, output_spec, depth, batch_norm, chkpt_num,
-                   lr, train_sets, val_sets, model_dir, data_dir, log_dir,
-                   **params):
+                   lr, train_sets, val_sets, data_dir, **params):
 
     net = Model(in_dim, output_spec, depth, bn=batch_norm).cuda()
     monitor = utils.LearningMonitor()
 
     if chkpt_num != 0:
-        utils.load_chkpt(net, monitor, chkpt_num, model_dir, log_dir)
+        utils.load_chkpt(net, monitor, chkpt_num, 
+                         params["model_dir"], 
+                         params["log_dir"])
 
     loss_fn = loss.BinomialCrossEntropyWithLogits()
 
