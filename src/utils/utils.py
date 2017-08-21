@@ -33,7 +33,7 @@ def save_chkpt(model, learning_monitor, iter_num, model_dir, log_dir):
     torch.save(model.state_dict(), chkpt_fname)
 
     # Save learning monitor 
-    lm_fname = os.path.join(log_dir, "stats_{}.h5".format(iter_num))
+    lm_fname = os.path.join(log_dir, "stats{}.h5".format(iter_num))
     learning_monitor.save(lm_fname, iter_num)
 
 
