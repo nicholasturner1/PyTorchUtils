@@ -14,10 +14,10 @@ import utils
 EXPT_NAME     = sys.argv[1]
 GPU           = sys.argv[2]
 MODEL_FNAME   = sys.argv[3]
-CHKPT_FNAME   = sys.argv[4]
+CHKPT_NUM     = sys.argv[4]
 DSET_NAMES    = sys.argv[5:]
 
-DATA_DIR = "/usr/people/nturner/research/datasets/SNEMI3D/train_val_test/"
+DATA_DIR = "/usr/people/nturner/research/datasets/SNEMI3D/"
 
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
 
@@ -29,9 +29,9 @@ params = {}
 params["in_dim"]      = 1
 params["output_spec"] = collections.OrderedDict(psd_label=1)
 params["depth"]       = 4
-params["batch_norm"]  = False
+params["batch_norm"]  = False 
 params["activation"]  = F.sigmoid
-params["chkpt_fname"] = CHKPT_FNAME
+params["chkpt_num"]   = CHKPT_NUM
 
 #IO/Record params
 params["expt_dir"]    = "experiments/{}".format(EXPT_NAME)
@@ -60,11 +60,12 @@ Model = model_module.Model
 #============================================================
 
 def create_network(in_dim, depth, output_spec, 
-                   batch_norm, chkpt_fname, **params):
+                   batch_norm, chkpt_num, model_dir, log_dir, **params):
 
     net = Model(in_dim, output_spec, depth, bn=batch_norm).cuda()
+    lm  = utils.LearningMonitor()
 
-    net.load_state_dict(torch.load(chkpt_fname))
+    utils.load_chkpt(net, lm, chkpt_num, model_dir, log_dir)
 
     return net
 
@@ -86,14 +87,14 @@ def make_forward_scanner(dset_name, input_spec, scan_spec, scan_params, **params
     return dp.ForwardScanner(vd, scan_spec, params=scan_params)
     
 
-def save_output(output, dset_name, iter_num, fwd_dir, **params):
+def save_output(output, dset_name, chkpt_num, fwd_dir, **params):
     """ Saves the volumes within a DataProvider ForwardScanner """
 
     for k in output.outputs.data.iterkeys():
 
         output_data = output.outputs.get_data(k)
 
-        basename = "{}_{}_{}.h5".format(dset_name, k, iter_num)
+        basename = "{}_{}_{}.h5".format(dset_name, k, chkpt_num)
         full_fname = os.path.join( fwd_dir, basename )
 
         utils.write_h5(output_data[0,:,:,:], full_fname)
@@ -105,9 +106,8 @@ def main(**params):
 
     net = create_network(**params)
 
-    iter_num = utils.iter_from_chkpt_fname(params["chkpt_fname"])
     utils.log_tagged_modules(params["modules_used"], params["log_dir"], 
-                             "fwd", iter_num)
+                             "fwd", params["chkpt_num"])
 
     for dset in params["dsets"]:
         print(dset)
@@ -117,7 +117,7 @@ def main(**params):
         output = forward.forward(net, fs, params["scan_spec"], 
                                  activation=params["activation"])
 
-        save_output(output, dset, iter_num, **params)
+        save_output(output, dset, **params)
 
 
 if __name__ == "__main__":
