@@ -37,7 +37,7 @@ params["avgs_intv"]   = 50
 params["chkpt_intv"]  = 10000
 params["chkpt_num"]   = CHKPT_NUM
 
-#IO/Record params #SOME HAVE HOOKS TO TRAIN.PY
+#IO/Record params 
 params["expt_dir"]   = "experiments/{}".format(EXPT_NAME)
 params["model_dir"]  = os.path.join(params["expt_dir"], "models")
 params["log_dir"]    = os.path.join(params["expt_dir"], "logs")
