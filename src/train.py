@@ -20,7 +20,7 @@ import utils
 
 required_params = ["max_iter","test_intv","test_iter",
                    "avgs_intv","chkpt_intv","expt_dir",
-                   "model_dir","log_dir"]
+                   "model_dir","log_dir","batch_size"]
 
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
@@ -41,8 +41,8 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
     print("======= BEGIN TRAINING LOOP ========")
     for i in range(last_iter, params['max_iter']):
 
-        #Make sure no mask is empty (data for all tasks)
-        sample = fetch_nonempty_sample(sampler, mask_names)
+        # Make sure no mask is empty (data for all tasks)
+        sample = fetch_nonempty_sample(sampler, mask_names, params['batch_size'])
 
         inputs, labels, masks = make_variables(sample, sample_spec, "train")
 
@@ -166,21 +166,28 @@ def params_defined(params):
     return True
 
 
-def fetch_nonempty_sample(sampler, masks):
+def fetch_nonempty_sample(sampler, masks, num=1):
     """
-    Pulls a sample from the sampler with SOME unmasked
+    Pulls a num samples from the sampler with SOME unmasked
     voxels for each task
     """
 
-    sample = sampler.get()
+    slices = [sampler.get() for i in xrange(num)]
 
-    #Making sure no masks are empty
-    while utils.masks_not_empty(sample, masks):
-      sample = sampler.get()
+    # Making sure no masks are empty
+    for i in range(num):
+        while utils.masks_not_empty(slices[i], masks):
+          slices[i] = sampler.get()
 
     # Reshape to add sample dimension (minibatch size = 1).
-    for k, v in sample.iteritems():
-        sample[k] = np.expand_dims(v, axis=0)
+    for i in range(num):
+        for k, v in slices[i].iteritems():
+            slices[i][k] = np.expand_dims(v, axis=0)
+
+    # Concatentate the slices into one sample.
+    sample = {}
+    for k in slices[0]:
+        sample[k] = np.concatenate(tuple([slices[i][k] for i in range(num)]))
 
     return sample
 
