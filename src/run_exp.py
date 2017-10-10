@@ -87,7 +87,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
 
 
 def set_gpus(gpu_list):
-    os.environ["CUDA_VISIBLE_DEVICES"] = " ".join(gpu_list)
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_list)
 
 
 def make_required_dirs(model_dir, log_dir, fwd_dir, **params):
@@ -138,9 +138,9 @@ if __name__ == "__main__":
                         help="DataProvider Sampler Filename")
     parser.add_argument("model_fname",
                         help="Model Template Filename")
-    parser.add_argument("--batch_sz", default=1,
+    parser.add_argument("--batch_sz",  type=int, default=1,
                         help="Batch size for each sample")
-    parser.add_argument("--chkpt_num", default=0,
+    parser.add_argument("--chkpt_num", type=int, default=0,
                         help="Checkpoint Number")
     parser.add_argument("--gpus", default=["0"], nargs="+")
 
