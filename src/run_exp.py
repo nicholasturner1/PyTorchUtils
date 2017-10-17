@@ -36,7 +36,7 @@ def main(**args):
 def fill_params(expt_name, chkpt_num, batch_sz, gpus,
                 sampler_fname, model_fname, **args):
 
-    params = dict()
+    params = {}
 
     #Model params
     params["in_dim"]       = 1
@@ -73,6 +73,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     #Use-specific Module imports
     params["sampler_class"] = imp.load_source("Sampler",sampler_fname).Sampler
     params["model_class"]    = imp.load_source("Model",model_fname).Model
+    
     #"Schema" for turning the parameters above into arguments
     # for the model class
     params["model_args"]     = [ params["in_dim"], params["output_spec"],

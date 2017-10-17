@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys, imp
+import os, imp
 import collections
 
 import torch
@@ -11,70 +11,99 @@ import forward
 import utils
 
 
-EXPT_NAME     = sys.argv[1]
-GPU           = sys.argv[2]
-MODEL_FNAME   = sys.argv[3]
-CHKPT_NUM     = sys.argv[4]
-DSET_NAMES    = sys.argv[5:]
+def main(**args):
 
-DATA_DIR = "/usr/people/nturner/research/datasets/SNEMI3D/"
+    #args should be the info you need to specify the params
+    # for a given experiment, but only params should be used below
+    params = fill_params(**args)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = GPU
+    set_gpus(params["gpus"])
 
+    net = create_network(**params)
 
-#============================================================
-params = {}
+    utils.log_tagged_modules(params["modules_used"], params["log_dir"],
+                             "fwd", params["chkpt_num"])
 
-#Model params
-params["in_dim"]      = 1
-params["output_spec"] = collections.OrderedDict(psd_label=1)
-params["depth"]       = 4
-params["batch_norm"]  = False 
-params["activation"]  = F.sigmoid
-params["chkpt_num"]   = CHKPT_NUM
+    for dset in params["dsets"]:
+        print(dset)
 
-#IO/Record params
-params["expt_dir"]    = "experiments/{}".format(EXPT_NAME)
-params["model_dir"]   = os.path.join(params["expt_dir"], "models")
-params["log_dir"]     = os.path.join(params["expt_dir"], "logs")
-params["fwd_dir"]     = os.path.join(params["expt_dir"], "forward")
+        fs = make_forward_scanner(dset, **params)
 
-#Dataset params
-params["dsets"]       = DSET_NAMES
-params["input_spec"]  = collections.OrderedDict(input=(18,160,160)) #dp dataset spec
-params["scan_spec"]   = collections.OrderedDict(psd=(1,18,160,160)) 
-params["scan_params"] = dict(stride=(0.5,0.5,0.5), blend="bump")
+        output = forward.forward(net, fs, params["scan_spec"],
+                                 activation=params["activation"])
+
+        save_output(output, dset, **params)
 
 
-#============================================================
+def fill_params(expt_name, chkpt_num, gpus,
+                model_fname, dset_names):
 
-#Modules used for record-keeping
-params["modules_used"] = [MODEL_FNAME, "layers.py"]
+    params = {}
+
+    #Model params
+    params["in_dim"]      = 1
+    params["output_spec"] = collections.OrderedDict(psd_label=1)
+    params["depth"]       = 4
+    params["batch_norm"]  = True
+    params["activation"]  = F.sigmoid
+    params["chkpt_num"]   = chkpt_num
+
+    #GPUS
+    params["gpus"] = gpus
+
+    #IO/Record params
+    params["expt_name"]   = expt_name
+    params["expt_dir"]    = "experiments/{}".format(expt_name)
+    params["model_dir"]   = os.path.join(params["expt_dir"], "models")
+    params["log_dir"]     = os.path.join(params["expt_dir"], "logs")
+    params["fwd_dir"]     = os.path.join(params["expt_dir"], "forward")
+
+    #Dataset params
+    params["data_dir"]    = os.path.expanduser(
+                            "~/seungmount/research/Nick/datasets/SNEMI3D/")
+    assert os.path.isdir(params["data_dir"]),"nonexistent data directory"
+    params["dsets"]       = dset_names
+    params["input_spec"]  = collections.OrderedDict(input=(18,160,160)) #dp dataset spec
+    params["scan_spec"]   = collections.OrderedDict(psd=(1,18,160,160))
+    params["scan_params"] = dict(stride=(0.5,0.5,0.5), blend="bump")
+
+    #Use-specific Module imports
+    params["model_class"]  = imp.load_source("Model", model_fname).Model
+
+    #"Schema" for turning the parameters above into arguments
+    # for the model class
+    params["model_args"]   = [params["in_dim"], params["output_spec"],
+                             params["depth"] ]
+    params["model_kwargs"] = { "bn" : params["batch_norm"] }
+
+    #Modules used for record-keeping
+    params["modules_used"] = [model_fname, "layers.py"]
+
+    return params
 
 
-#Use-specific Module imports
-model_module = imp.load_source("Model", MODEL_FNAME)
-Model = model_module.Model
+def set_gpus(gpu_list):
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_list)
 
 
-#============================================================
+def create_network(model_args, model_kwargs, chkpt_num,
+                   model_dir, log_dir, **params):
 
-def create_network(in_dim, depth, output_spec, 
-                   batch_norm, chkpt_num, model_dir, log_dir, **params):
-
-    net = Model(in_dim, output_spec, depth, bn=batch_norm).cuda()
-    lm  = utils.LearningMonitor()
+    Model = params["model_class"]
+    net = torch.nn.DataParallel(Model(*model_args, **model_kwargs)).cuda()
+    lm  = utils.LearningMonitor() #just a dummy to load a checkpoint
 
     utils.load_chkpt(net, lm, chkpt_num, model_dir, log_dir)
 
     return net
 
 
-def make_forward_scanner(dset_name, input_spec, scan_spec, scan_params, **params):
+def make_forward_scanner(dset_name, data_dir, input_spec,
+                         scan_spec, scan_params, **params):
     """ Creates a DataProvider ForwardScanner from a dset name """
 
     # Reading EM image
-    img = utils.read_h5(os.path.join(DATA_DIR, dset_name + "_img.h5"))
+    img = utils.read_h5(os.path.join(data_dir, dset_name + "_img.h5"))
     img = (img / 255.).astype("float32")
 
     # Creating DataProvider Dataset
@@ -85,7 +114,7 @@ def make_forward_scanner(dset_name, input_spec, scan_spec, scan_params, **params
 
     # Returning DataProvider ForwardScanner
     return dp.ForwardScanner(vd, scan_spec, params=scan_params)
-    
+
 
 def save_output(output, dset_name, chkpt_num, fwd_dir, **params):
     """ Saves the volumes within a DataProvider ForwardScanner """
@@ -102,24 +131,25 @@ def save_output(output, dset_name, chkpt_num, fwd_dir, **params):
 
 #============================================================
 
-def main(**params):
-
-    net = create_network(**params)
-
-    utils.log_tagged_modules(params["modules_used"], params["log_dir"], 
-                             "fwd", params["chkpt_num"])
-
-    for dset in params["dsets"]:
-        print(dset)
-
-        fs = make_forward_scanner(dset, **params)
-
-        output = forward.forward(net, fs, params["scan_spec"], 
-                                 activation=params["activation"])
-
-        save_output(output, dset, **params)
 
 
 if __name__ == "__main__":
 
-    main(**params)
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument("expt_name",
+                        help="Experiment Name")
+    parser.add_argument("model_fname",
+                        help="Model Template Filename")
+    parser.add_argument("chkpt_num", type=int,
+                        help="Checkpoint Number")
+    parser.add_argument("dset_names", nargs="+",
+                        help="Inference Dataset Names")
+    parser.add_argument("--gpus", default=["0"], nargs="+")
+
+
+    args = parser.parse_args()
+
+    main(**vars(args))
