@@ -66,7 +66,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
                            loss_fn, sample_spec, monitor, i)
             start = time.time() #ignore validation time
 
-        if i % params["avgs_intv"] == 0 and i > last_iter + params["warm_up"]:
+        if i % params["avgs_intv"] == 0 or i < last_iter + params["warm_up"]-1:
             monitor.compute_avgs(i, "train")
 
             #Displaying stats
