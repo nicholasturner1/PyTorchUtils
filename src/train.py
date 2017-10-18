@@ -20,7 +20,8 @@ import utils
 
 required_params = ["max_iter","test_intv","test_iter",
                    "avgs_intv","chkpt_intv","expt_dir",
-                   "model_dir","log_dir","batch_size"]
+                   "model_dir","log_dir","batch_size",
+                   "warm_up"]
 
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
@@ -65,7 +66,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
                            loss_fn, sample_spec, monitor, i)
             start = time.time() #ignore validation time
 
-        if i % params["avgs_intv"] == 0 and i != last_iter:
+        if i % params["avgs_intv"] == 0 and i > last_iter + params["warm_up"]:
             monitor.compute_avgs(i, "train")
 
             #Displaying stats

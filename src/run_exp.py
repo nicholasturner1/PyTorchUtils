@@ -51,6 +51,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["test_iter"]   = 100
     params["avgs_intv"]   = 50
     params["chkpt_intv"]  = 10000
+    params["warm_up"]      = 50
     params["chkpt_num"]   = chkpt_num
     params["batch_size"]  = batch_sz
 
