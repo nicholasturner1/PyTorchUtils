@@ -93,6 +93,11 @@ def make_variable(np_arr, requires_grad=True, volatile=False):
       return Variable(torch.from_numpy(np_arr.copy()), volatile=True).cuda()
 
 
+def set_gpus(gpu_list):
+    """ Sets the gpus visible to this process """
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_list)
+
+
 def read_h5(fname):
     
     with h5py.File(fname) as f:
