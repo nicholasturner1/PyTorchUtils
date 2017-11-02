@@ -38,7 +38,7 @@ def save_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
 
 
 def create_network(model_class, model_args, model_kwargs, 
-                   chkpt_num=0, model_dir=None):
+                   chkpt_num=0, model_dir=None, **params):
 
     net = torch.nn.DataParallel(model_class(*model_args, **model_kwargs)).cuda()
 

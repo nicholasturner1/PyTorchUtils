@@ -17,9 +17,9 @@ def main(**args):
     # for a given experiment, but only params should be used below
     params = fill_params(**args)
 
-    set_gpus(params["gpus"])
+    utils.set_gpus(params["gpus"])
 
-    net = create_network(**params)
+    net = utils.create_network(**params)
 
     utils.log_tagged_modules(params["modules_used"], params["log_dir"],
                              "fwd", params["chkpt_num"])
@@ -36,7 +36,7 @@ def main(**args):
 
 
 def fill_params(expt_name, chkpt_num, gpus,
-                model_fname, dset_names):
+                nobn, model_fname, dset_names):
 
     params = {}
 
@@ -44,7 +44,7 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["in_dim"]      = 1
     params["output_spec"] = collections.OrderedDict(psd_label=1)
     params["depth"]       = 4
-    params["batch_norm"]  = True
+    params["batch_norm"]  = not(nobn)
     params["activation"]  = F.sigmoid
     params["chkpt_num"]   = chkpt_num
 
@@ -80,22 +80,6 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["modules_used"] = [model_fname, "layers.py"]
 
     return params
-
-
-def set_gpus(gpu_list):
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_list)
-
-
-def create_network(model_args, model_kwargs, chkpt_num,
-                   model_dir, log_dir, **params):
-
-    Model = params["model_class"]
-    net = torch.nn.DataParallel(Model(*model_args, **model_kwargs)).cuda()
-    lm  = utils.LearningMonitor() #just a dummy to load a checkpoint
-
-    utils.load_chkpt(net, lm, chkpt_num, model_dir, log_dir)
-
-    return net
 
 
 def make_forward_scanner(dset_name, data_dir, input_spec,
@@ -147,6 +131,8 @@ if __name__ == "__main__":
                         help="Checkpoint Number")
     parser.add_argument("dset_names", nargs="+",
                         help="Inference Dataset Names")
+    parser.add_argument("--nobn", action="store_true",
+                        help="Whether net uses batch normalization")
     parser.add_argument("--gpus", default=["0"], nargs="+")
 
 
