@@ -22,13 +22,13 @@ def main(**args):
     # for a given experiment, but only params should be used below
     params = fill_params(**args)
 
-    set_gpus(params["gpus"])
+    utils.set_gpus(params["gpus"])
 
-    make_required_dirs(**params)
+    utils.make_required_dirs(**params)
 
     utils.log_tagged_modules(params["modules_used"],
                              params["log_dir"], "train",
-                             iter_num=params["chkpt_num"])
+                             chkpt_num=params["chkpt_num"])
 
     start_training(**params)
 
@@ -58,8 +58,8 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     #Sampling params
     params["data_dir"]     = os.path.expanduser("~/seungmount/research/Nick/datasets/SNEMI3D/")
     assert os.path.isdir(params["data_dir"]),"nonexistent data directory"
-    params["train_sets"]   = ["train"]
-    params["val_sets"]     = ["val"]
+    params["train_sets"]   = ["K_train"]
+    params["val_sets"]     = ["K_val"]
 
     #GPUS
     params["gpus"] = gpus
@@ -88,23 +88,11 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     return params
 
 
-def set_gpus(gpu_list):
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_list)
-
-
-def make_required_dirs(model_dir, log_dir, fwd_dir, **params):
-
-    for d in [model_dir, log_dir, fwd_dir]:
-      if not os.path.isdir(d):
-        os.makedirs(d)
-
-
-def start_training(model_args, model_kwargs, chkpt_num,
+def start_training(model_class, model_args, model_kwargs, chkpt_num,
                    lr, train_sets, val_sets, data_dir, **params):
 
     #PyTorch Model
-    Model = params["model_class"]
-    net = torch.nn.DataParallel(Model(*model_args, **model_kwargs)).cuda()
+    net = utils.create_network(model_class, model_args, model_kwargs)
     monitor = utils.LearningMonitor()
 
     #Loading model checkpoint (if applicable)

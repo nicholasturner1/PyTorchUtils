@@ -15,6 +15,13 @@ import datetime
 import h5py
 
 
+def make_required_dirs(model_dir, log_dir, fwd_dir, **params):
+
+    for d in [model_dir, log_dir, fwd_dir]:
+        if not os.path.isdir(d):
+            os.makedirs(d)
+
+
 def log_tagged_modules(module_fnames, log_dir, phase, chkpt_num=0):
     
     timestamp = datetime.datetime.now().strftime("%d%m%y_%H%M%S")
