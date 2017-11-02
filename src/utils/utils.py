@@ -15,37 +15,62 @@ import datetime
 import h5py
 
 
-def log_tagged_modules(module_fnames, log_dir, phase, iter_num=0):
+def log_tagged_modules(module_fnames, log_dir, phase, chkpt_num=0):
     
     timestamp = datetime.datetime.now().strftime("%d%m%y_%H%M%S")
 
     for fname in module_fnames:
         basename = os.path.basename(fname)
-        output_basename = "{}_{}{}_{}".format(timestamp, phase, iter_num, basename)
+        output_basename = "{}_{}{}_{}".format(timestamp, phase, chkpt_num, basename)
 
         shutil.copyfile(fname, os.path.join(log_dir, output_basename))
 
 
-def save_chkpt(model, learning_monitor, iter_num, model_dir, log_dir):
+def save_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
 
     # Save model
-    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(iter_num))
+    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
     torch.save(model.state_dict(), chkpt_fname)
 
     # Save learning monitor 
-    lm_fname = os.path.join(log_dir, "stats{}.h5".format(iter_num))
-    learning_monitor.save(lm_fname, iter_num)
+    lm_fname = os.path.join(log_dir, "stats{}.h5".format(chkpt_num))
+    learning_monitor.save(lm_fname, chkpt_num)
 
 
-def load_chkpt(model, learning_monitor, iter_num, model_dir, log_dir):
+def create_network(model_class, model_args, model_kwargs, 
+                   chkpt_num=0, model_dir=None):
 
-    # Load model params
-    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(iter_num))
+    net = torch.nn.DataParallel(model_class(*model_args, **model_kwargs)).cuda()
+
+    if chkpt_num > 0:
+        load_network(net, chkpt_num, model_dir)
+
+    return net
+    
+
+def load_network(model, chkpt_num, model_dir):
+
+    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
     model.load_state_dict(torch.load(chkpt_fname))
     
-    # Load learning monitor
-    lm_fname = os.path.join(log_dir, "stats{}.h5".format(iter_num))
+    return model
+
+
+def load_learning_monitor(learning_monitor, chkpt_num, log_dir):
+
+    lm_fname = os.path.join(log_dir, "stats{}.h5".format(chkpt_num))
     learning_monitor.load(lm_fname)
+
+    return learning_monitor
+    
+
+def load_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
+
+    m = load_network(model, chkpt_num, model_dir)
+    
+    lm = load_learning_monitor(learning_monitor, chkpt_num, log_dir)
+
+    return m, lm   
 
 
 def iter_from_chkpt_fname(chkpt_fname):
@@ -66,6 +91,7 @@ def make_variable(np_arr, requires_grad=True, volatile=False):
       return Variable(torch.from_numpy(np_arr.copy()), requires_grad=requires_grad).cuda()
     else:
       return Variable(torch.from_numpy(np_arr.copy()), volatile=True).cuda()
+
 
 def read_h5(fname):
     
