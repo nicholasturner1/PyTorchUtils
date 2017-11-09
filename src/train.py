@@ -215,6 +215,7 @@ def run_validation(model, sampler, num_iters, loss_fn, sample_spec, monitor, ite
 
     mask_names = sample_spec.get_masks()
     start = time.time()
+    model.eval()
     for i in range(num_iters):
 
         #Make sure no mask is empty (data for all tasks)
@@ -239,3 +240,4 @@ def run_validation(model, sampler, num_iters, loss_fn, sample_spec, monitor, ite
     avg_time = round(monitor.get_last_value("iter_time","test"),5)
 
     print("TEST: {} avg losses = {} (elapsed = {} s avg)".format(iter_num, avg_losses, avg_time))
+    model.train()

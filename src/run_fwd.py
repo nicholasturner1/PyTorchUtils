@@ -20,6 +20,7 @@ def main(**args):
     utils.set_gpus(params["gpus"])
 
     net = utils.create_network(**params)
+    net.eval()
 
     utils.log_tagged_modules(params["modules_used"], params["log_dir"],
                              "fwd", params["chkpt_num"])
