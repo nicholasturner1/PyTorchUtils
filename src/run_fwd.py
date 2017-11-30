@@ -11,7 +11,7 @@ import forward
 import utils
 
 
-def main(**args):
+def main(noeval, **args):
 
     #args should be the info you need to specify the params
     # for a given experiment, but only params should be used below
@@ -20,10 +20,11 @@ def main(**args):
     utils.set_gpus(params["gpus"])
 
     net = utils.create_network(**params)
-    net.eval()
+    if not noeval:
+        net.eval()
 
     utils.log_tagged_modules(params["modules_used"], params["log_dir"],
-                             "fwd", params["chkpt_num"])
+                             params["log_tag"], params["chkpt_num"])
 
     for dset in params["dsets"]:
         print(dset)
@@ -37,7 +38,7 @@ def main(**args):
 
 
 def fill_params(expt_name, chkpt_num, gpus,
-                nobn, model_fname, dset_names):
+                nobn, model_fname, dset_names, tag):
 
     params = {}
 
@@ -58,6 +59,8 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["model_dir"]   = os.path.join(params["expt_dir"], "models")
     params["log_dir"]     = os.path.join(params["expt_dir"], "logs")
     params["fwd_dir"]     = os.path.join(params["expt_dir"], "forward")
+    params["log_tag"]     = "fwd_" + tag if len(tag) > 0 else "fwd"
+    params["output_tag"]  = tag
 
     #Dataset params
     params["data_dir"]    = os.path.expanduser(
@@ -101,14 +104,19 @@ def make_forward_scanner(dset_name, data_dir, input_spec,
     return dp.ForwardScanner(vd, scan_spec, params=scan_params)
 
 
-def save_output(output, dset_name, chkpt_num, fwd_dir, **params):
+def save_output(output, dset_name, chkpt_num, fwd_dir, output_tag, **params):
     """ Saves the volumes within a DataProvider ForwardScanner """
 
     for k in output.outputs.data.iterkeys():
 
         output_data = output.outputs.get_data(k)
 
-        basename = "{}_{}_{}.h5".format(dset_name, k, chkpt_num)
+        if len(output_tag) == 0:
+            basename = "{}_{}_{}.h5".format(dset_name, k, chkpt_num)
+        else:
+            basename = "{}_{}_{}_{}.h5".format(dset_name, k, 
+                                               chkpt_num, output_tag)
+
         full_fname = os.path.join( fwd_dir, basename )
 
         utils.write_h5(output_data[0,:,:,:], full_fname)
@@ -135,6 +143,10 @@ if __name__ == "__main__":
     parser.add_argument("--nobn", action="store_true",
                         help="Whether net uses batch normalization")
     parser.add_argument("--gpus", default=["0"], nargs="+")
+    parser.add_argument("--noeval", action="store_true",
+                        help="Whether to use eval version of network")
+    parser.add_argument("--tag", default="",
+                        help="Output (and Log) Filename Tag")
 
 
     args = parser.parse_args()
