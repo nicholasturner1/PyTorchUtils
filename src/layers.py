@@ -53,7 +53,7 @@ class FactConv(nn.Module):
 
     nn.Module.__init__(self)
     if ks[0] > 1:
-      self.factor = Conv(D_in, D_out, (1,ks[1],ks[2]), 
+      self.factor = Conv(D_in, D_out, (1,ks[1],ks[2]),
                          (1,st[1],st[2]), (0,pd[1],pd[2]), bias=False)
       ks = (ks[0],1,1)
       st = (st[0],1,1)
@@ -89,6 +89,37 @@ class ConvT(nn.Module):
     return self.conv(x)
 
 
+class ResizeConv(nn.Module):
+    """ Upsampling followed by a Convolution """
+
+    def __init__(self, D_in, D_out, ks, st, pd, bias=True, mode="nearest"):
+
+        nn.Module.__init__(self)
+
+        self.upsample = Upsample2D(scale_factor=2, mode=mode)
+        self.conv = Conv(D_in, D_out, ks, st, pd, bias=bias)
+
+
+    def forward(self, x):
+
+        return self.conv(self.upsample(x))
+
+
+class Upsample2D(nn.Module):
+
+    def __init__(self, scale_factor, mode="nearest"):
+
+        nn.Module.__init__(self)
+
+        self.scale_factor = scale_factor
+        self.upsample = nn.Upsample(scale_factor=2, mode=mode)
+
+    def forward(self, x):
+
+        #upsample in all dimensions, and undo the z upsampling
+        return self.upsample(x)[:,:,::self.scale_factor,:,:]
+
+
 class FactConvT(nn.Module):
   """ Factorized 3d ConvTranspose using ConvT """
 
@@ -96,7 +127,7 @@ class FactConvT(nn.Module):
 
     nn.Module.__init__(self)
     if ks[0] > 1:
-      self.factor = ConvT(D_in, D_out, (2,ks[1],ks[2]), 
+      self.factor = ConvT(D_in, D_out, (2,ks[1],ks[2]),
                           (1,st[1],st[2]), (0,pd[1],pd[2]), bias=False)
       ks = (ks[0],1,1)
       st = (st[0],1,1)
