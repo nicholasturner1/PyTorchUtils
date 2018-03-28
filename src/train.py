@@ -25,9 +25,8 @@ required_params = ["max_iter","test_intv","test_iter",
 
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
-          monitor=None, **params):
-
-    """ Generalized training fn """
+          train_writer=None, val_writer=None, monitor=None, **params):
+    """Generalized training fn"""
 
     assert params_defined(params), "Params under-specified"
 
@@ -38,9 +37,9 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
     sample_spec = utils.SampleSpec(sampler.get().keys())
     mask_names = sample_spec.get_masks()
 
-    start = time.time()
     print("======= BEGIN TRAINING LOOP ========")
     for i in range(last_iter, params['max_iter']):
+        start = time.time()
 
         # Make sure no mask is empty (data for all tasks)
         sample = fetch_nonempty_sample(sampler, mask_names, params['batch_size'])
@@ -54,25 +53,25 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
         update_model(optimizer, losses)
 
-        log_errors(monitor, losses, nmsks)
+        log_errors(monitor, train_writer, losses, nmsks, i)
 
         # Elapsed time.
         elapsed = time.time() - start
-        log_elapsed_time(monitor, elapsed, "train")
-        start = time.time()
+        log_elapsed_time(monitor, train_writer, elapsed, i, "train")
 
         if val_sampler is not None and i % params["test_intv"] == 0:
             run_validation(model, val_sampler, params["test_iter"],
-                           loss_fn, sample_spec, monitor, i)
-            start = time.time() #ignore validation time
+                           loss_fn, sample_spec, monitor, val_writer, i)
 
         if i % params["avgs_intv"] == 0 or i < last_iter + params["warm_up"]-1:
             monitor.compute_avgs(i, "train")
 
-            #Displaying stats
+            #Displaying stats (both to console and TensorBoard)
             avg_losses = { k : round(monitor.get_last_value(k, "train"),5)
                            for k in losses.keys() }
             avg_time = round(monitor.get_last_value("iter_time","train"),5)
+
+            write_averages_tb(train_writer, avg_losses, avg_time, i)
             print("iter: {}; avg losses = {} (iter_time = {} s on avg)".format(i,avg_losses, avg_time))
 
         if i % params["chkpt_intv"] == 0 and i != last_iter:
@@ -81,14 +80,24 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
                              params["log_dir"])
 
 
+def write_averages_tb(writer, losses, time, i):
+    """Writes the average losses and iter time to a TensorBoard writer"""
+    if writer is not None:
+        writer.add_scalar("Time Avg", time, i)
+        for (k,v) in losses.items():
+            writer.add_scalar("Loss {} Avg".format(k), v, i)
 
-def log_elapsed_time(monitor, elapsed_time, phase):
+
+def log_elapsed_time(monitor, writer, elapsed_time, i, phase="train"):
     """ Stores the iteration time within the LearningMonitor """
     monitor.add_to_num({"iter_time":elapsed_time}, phase)
     monitor.add_to_denom({"iter_time":1}, phase)
 
+    if writer is not None:
+        writer.add_scalar("Time", elapsed_time, i)
 
-def log_errors(monitor, losses, nmsks, phase="train"):
+
+def log_errors(monitor, writer, losses, nmsks, i, phase="train"):
     """ Adds the losses to the running averages within the LearningMonitor """
 
     assert losses.keys() == nmsks.keys(), "Mismatched losses and nmsks"
@@ -99,6 +108,10 @@ def log_errors(monitor, losses, nmsks, phase="train"):
 
     monitor.add_to_num(losses, phase)
     monitor.add_to_denom(nmsks, phase)
+
+    if writer is not None:
+        for k in losses.keys():
+            writer.add_scalar("Loss {}".format(k), losses[k] / nmsks[k], i)
 
 
 def update_model(optimizer, losses):
@@ -145,23 +158,13 @@ def eval_error(preds, labels, masks, loss_fn, sample_spec):
     return losses, nmsks
 
 
-def save_checkpoint(model, monitor, i, base_dir):
-    """ Writes model checkpoint and matching learning curve to disk """
-    # Save model
-    ckpt_fname = os.path.join(base_dir, "models", "model{}.ckpt".format(i))
-    torch.save(model.state_dict(), ckpt_fname)
-
-    # Save stats
-    stats_fname = os.path.join(base_dir, "logs", "stats_{}.h5".format(i))
-    monitor.save(stats_fname, i)
-
-
 def params_defined(params):
     " Checks whether all required parameters have been defined "
 
     defined_keys = set(params.keys())
     for param in required_params:
       if not param in defined_keys:
+        print(param)
         return False
 
     return True
@@ -177,7 +180,7 @@ def fetch_nonempty_sample(sampler, masks, num=1):
 
     # Making sure no masks are empty
     for i in range(num):
-        while utils.masks_not_empty(slices[i], masks):
+        while utils.masks_empty(slices[i], masks):
           slices[i] = sampler.get()
 
     # Reshape to add sample dimension (minibatch size = 1).
@@ -211,12 +214,12 @@ def make_variables(sample, sample_spec, phase="train"):
     return input_vars, label_vars, mask_vars
 
 
-def run_validation(model, sampler, num_iters, loss_fn, sample_spec, monitor, iter_num):
+def run_validation(model, sampler, num_iters, loss_fn,
+                   sample_spec, monitor, writer, i):
 
     mask_names = sample_spec.get_masks()
     start = time.time()
-    model.eval()
-    for i in range(num_iters):
+    for j in range(num_iters):
 
         #Make sure no mask is empty (data for all tasks)
         sample = fetch_nonempty_sample(sampler, mask_names)
@@ -228,16 +231,16 @@ def run_validation(model, sampler, num_iters, loss_fn, sample_spec, monitor, ite
 
         losses, nmsks = eval_error(preds, labels, masks, loss_fn, sample_spec)
 
-        log_errors(monitor, losses, nmsks, "test")
+        log_errors(monitor, writer, losses, nmsks, i, "test")
 
         # Elapsed time.
         elapsed = time.time() - start
-        log_elapsed_time(monitor, elapsed, "test")
+        log_elapsed_time(monitor, writer, elapsed, i, "test")
         start = time.time()
 
-    monitor.compute_avgs(iter_num, "test")
+    monitor.compute_avgs(i, "test")
     avg_losses = { k : round(monitor.get_last_value(k, "test"),5) for k in losses.keys() }
     avg_time = round(monitor.get_last_value("iter_time","test"),5)
+    write_averages_tb(writer, avg_losses, avg_time, i)
 
-    print("TEST: {} avg losses = {} (elapsed = {} s avg)".format(iter_num, avg_losses, avg_time))
-    model.train()
+    print("TEST: {} avg losses = {} (elapsed = {} s avg)".format(i, avg_losses, avg_time))

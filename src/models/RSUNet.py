@@ -162,7 +162,7 @@ class OutputModule(nn.Module):
     return [ getattr(self,layer)(x) for layer in self.output_layers ]
 
 
-class Model(nn.Module):
+class RSUNet(nn.Module):
   """ Full model """
 
   def __init__(self, D_in, output_spec, depth, io_size=io_size, io_stride=io_stride, bn=bn):
@@ -259,3 +259,4 @@ class Model(nn.Module):
 
     return self.outputdeconv(x)
 
+Model = RSUNet

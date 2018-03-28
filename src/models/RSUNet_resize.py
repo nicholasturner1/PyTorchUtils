@@ -39,7 +39,7 @@ io_size   = (1,5,5)
 io_stride = (1,1,1)
 
 
-class Model(nn.Module):
+class RSUNet_resize(nn.Module):
   """ Full model """
 
   def __init__(self, D_in, output_spec, depth, bn=True,
@@ -263,3 +263,6 @@ class OutputModule(nn.Module):
 
   def forward(self, x):
     return [ getattr(self,layer)(x) for layer in self.output_layers ]
+
+
+Model = RSUNet_resize

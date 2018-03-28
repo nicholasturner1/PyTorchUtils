@@ -17,10 +17,11 @@ import threading
 def sampler_daemon(sampler, q):
     " Function run by the thread "
     while True:
-        if not q.full():
-            q.put(sampler(imgs=["input"]))
-        else:
-            q.join()
+        q.put(sampler(imgs=['input']), block=True, timeout=None)
+        # if not q.full():
+        #     q.put(sampler(imgs=["input"]))
+        # else:
+        #     q.join()
 
 class AsyncSampler(object):
     " Wrapper class for asynchronous sampling functions "
@@ -37,4 +38,3 @@ class AsyncSampler(object):
         res = self.q.get()
         self.q.task_done()
         return res
-
