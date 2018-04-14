@@ -26,7 +26,7 @@ required_params = ["max_iter","test_intv","test_iter",
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
           train_writer=None, val_writer=None, monitor=None, **params):
-    """Generalized training fn"""
+    """ Generalized training functionn """
 
     assert params_defined(params), "Params under-specified"
 
@@ -53,11 +53,11 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
         update_model(optimizer, losses)
 
-        log_errors(monitor, train_writer, losses, nmsks, i)
+        log_errors(monitor, losses, nmsks, i)
 
         # Elapsed time.
         elapsed = time.time() - start
-        log_elapsed_time(monitor, train_writer, elapsed, i, "train")
+        log_elapsed_time(monitor, elapsed, i, "train")
 
         if val_sampler is not None and i % params["test_intv"] == 0:
             run_validation(model, val_sampler, params["test_iter"],
@@ -81,23 +81,20 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
 
 def write_averages_tb(writer, losses, time, i):
-    """Writes the average losses and iter time to a TensorBoard writer"""
+    """ Writes the average losses and iter time to a TensorBoard writer """
     if writer is not None:
         writer.add_scalar("Time Avg", time, i)
         for (k,v) in losses.items():
             writer.add_scalar("Loss {} Avg".format(k), v, i)
 
 
-def log_elapsed_time(monitor, writer, elapsed_time, i, phase="train"):
+def log_elapsed_time(monitor, elapsed_time, i, phase="train"):
     """ Stores the iteration time within the LearningMonitor """
     monitor.add_to_num({"iter_time":elapsed_time}, phase)
     monitor.add_to_denom({"iter_time":1}, phase)
 
-    if writer is not None:
-        writer.add_scalar("Time", elapsed_time, i)
 
-
-def log_errors(monitor, writer, losses, nmsks, i, phase="train"):
+def log_errors(monitor, losses, nmsks, i, phase="train"):
     """ Adds the losses to the running averages within the LearningMonitor """
 
     assert losses.keys() == nmsks.keys(), "Mismatched losses and nmsks"
@@ -108,10 +105,6 @@ def log_errors(monitor, writer, losses, nmsks, i, phase="train"):
 
     monitor.add_to_num(losses, phase)
     monitor.add_to_denom(nmsks, phase)
-
-    if writer is not None:
-        for k in losses.keys():
-            writer.add_scalar("Loss {}".format(k), losses[k] / nmsks[k], i)
 
 
 def update_model(optimizer, losses):
@@ -159,7 +152,7 @@ def eval_error(preds, labels, masks, loss_fn, sample_spec):
 
 
 def params_defined(params):
-    " Checks whether all required parameters have been defined "
+    """ Checks whether all required parameters have been defined """
 
     defined_keys = set(params.keys())
     for param in required_params:
@@ -172,7 +165,7 @@ def params_defined(params):
 
 def fetch_nonempty_sample(sampler, masks, num=1):
     """
-    Pulls a num samples from the sampler with SOME unmasked
+    Pulls samples from the sampler with SOME unmasked
     voxels for each task
     """
 
@@ -231,11 +224,11 @@ def run_validation(model, sampler, num_iters, loss_fn,
 
         losses, nmsks = eval_error(preds, labels, masks, loss_fn, sample_spec)
 
-        log_errors(monitor, writer, losses, nmsks, i, "test")
+        log_errors(monitor, losses, nmsks, i, "test")
 
         # Elapsed time.
         elapsed = time.time() - start
-        log_elapsed_time(monitor, writer, elapsed, i, "test")
+        log_elapsed_time(monitor, elapsed, i, "test")
         start = time.time()
 
     monitor.compute_avgs(i, "test")
