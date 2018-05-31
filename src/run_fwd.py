@@ -9,6 +9,7 @@ import dataprovider as dp
 
 import forward
 import utils
+import models
 
 
 def main(noeval, **args):
@@ -38,7 +39,7 @@ def main(noeval, **args):
 
 
 def fill_params(expt_name, chkpt_num, gpus,
-                nobn, model_fname, dset_names, tag):
+                nobn, model_name, dset_names, tag):
 
     params = {}
 
@@ -72,7 +73,8 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["scan_params"] = dict(stride=(0.5,0.5,0.5), blend="bump")
 
     #Use-specific Module imports
-    params["model_class"]  = imp.load_source("Model", model_fname).Model
+    model_module = getattr(models,model_name)
+    params["model_class"]  = model_module.Model
 
     #"Schema" for turning the parameters above into arguments
     # for the model class
@@ -81,7 +83,7 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["model_kwargs"] = { "bn" : params["batch_norm"] }
 
     #Modules used for record-keeping
-    params["modules_used"] = [model_fname, "layers.py"]
+    params["modules_used"] = [__file__, model_module.__file__, "layers.py"]
 
     return params
 
@@ -134,8 +136,8 @@ if __name__ == "__main__":
 
     parser.add_argument("expt_name",
                         help="Experiment Name")
-    parser.add_argument("model_fname",
-                        help="Model Template Filename")
+    parser.add_argument("model_name",
+                        help="Model Template Name")
     parser.add_argument("chkpt_num", type=int,
                         help="Checkpoint Number")
     parser.add_argument("dset_names", nargs="+",
