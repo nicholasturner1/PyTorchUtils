@@ -48,26 +48,26 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
 
     #Model params
     params["in_dim"]       = 1
-    params["output_spec"]  = collections.OrderedDict(psd_label=1)
+    params["output_spec"]  = collections.OrderedDict(soma_label=1)
     params["depth"]        = 4
     params["batch_norm"]   = True
 
     #Training procedure params
     params["max_iter"]    = 1000000
-    params["lr"]          = 0.00001
-    params["test_intv"]   = 100
-    params["test_iter"]   = 10
+    params["lr"]          = 0.0001
+    params["test_intv"]   = 1000
+    params["test_iter"]   = 100
     params["avgs_intv"]   = 50
-    params["chkpt_intv"]  = 10000
+    params["chkpt_intv"]  = 5000
     params["warm_up"]     = 50
     params["chkpt_num"]   = chkpt_num
     params["batch_size"]  = batch_sz
 
     #Sampling params
-    params["data_dir"]     = os.path.expanduser("~/seungmount/research/Nick/datasets/SNEMI3D/")
+    params["data_dir"]     = os.path.expanduser("~/seungmount/research/Nick/datasets/CSHL_GAD/")
     assert os.path.isdir(params["data_dir"]),"nonexistent data directory"
-    params["train_sets"]   = ["K_val"]
-    params["val_sets"]     = ["K_val"]
+    params["train_sets"]   = ["train"]
+    params["val_sets"]     = ["val"]
 
     #GPUS
     params["gpus"] = gpus

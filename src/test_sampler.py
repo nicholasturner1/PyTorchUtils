@@ -12,7 +12,7 @@ NUM_SAMPLES   = int(argv[2]) if len(argv) > 2 else 3
 
 sampler = imp.load_source("S",SAMPLER_FNAME)
 
-s = sampler.Sampler("~/research/datasets/SNEMI3D/", dsets=["AC4"],
+s = sampler.Sampler("~/research/datasets/CSHL_GAD/", dsets=["train"],
                     mode="train", patchsz=(18,160,160))
 
 for i in range(NUM_SAMPLES):
