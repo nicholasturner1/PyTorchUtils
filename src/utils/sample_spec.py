@@ -37,8 +37,8 @@ class SampleSpec(object):
 
 
     def has_mask(self, label_name):
-        " Returns whether a label has a matched mask "
-        assert self._mask_lookup.has_key(label_name), "{} not in lookup".format(label_name)
+        "Returns whether a label has a matched mask"
+        assert label_name in self._mask_lookup, "{} not in lookup".format(label_name)
         return self._mask_lookup[label_name] is not None
 
 
@@ -49,7 +49,7 @@ class SampleSpec(object):
 
     def get_mask_index(self, label_name):
         assert self._mask_lookup.has_key(label_name)
-        return self._masks.index( self._mask_lookup[label_name] )
+        return self._masks.index(self._mask_lookup[label_name])
 
 
     #================================================

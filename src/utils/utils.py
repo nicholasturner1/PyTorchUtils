@@ -6,13 +6,27 @@ Miscellaneous Utils
 Nicholas Turner <nturner@cs.princeton.edu>, 2017
 """
 
+import importlib
+import datetime
+import shutil
+import types
+import os
+import re
+
 import torch
 from torch.autograd import Variable
 import numpy as np
-
-import os, re, shutil
-import datetime
 import h5py
+
+
+__all__ = ["timestamp",
+           "make_required_dirs","log_tagged_modules","log_params",
+           "create_network","load_network","load_learning_monitor",
+           "save_chkpt","load_chkpt","iter_from_chkpt_fname",
+           "load_source",
+           "to_torch", "masks_empty",
+           "read_h5","write_h5",
+           "set_gpus"]
 
 
 def timestamp():
@@ -56,7 +70,7 @@ def save_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
 
     # Save model
     chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
-    torch.save(model.state_dict(), chkpt_fname)
+    torch.save(model.module.state_dict(), chkpt_fname)
 
     # Save learning monitor
     lm_fname = os.path.join(log_dir, "stats{}.h5".format(chkpt_num))
@@ -77,7 +91,7 @@ def create_network(model_class, model_args, model_kwargs,
 def load_network(model, chkpt_num, model_dir):
 
     chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
-    model.load_state_dict(torch.load(chkpt_fname))
+    model.module.load_state_dict(torch.load(chkpt_fname))
 
     return model
 
@@ -99,23 +113,28 @@ def load_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
     return m, lm
 
 
+def load_source(fname, module_name="module"):
+    """Updated version of imp.load_source(fname)"""
+    loader = importlib.machinery.SourceFileLoader(module_name, fname)
+    mod = types.ModuleType(loader.name)
+    loader.exec_module(mod)
+    return mod
+
+
 def iter_from_chkpt_fname(chkpt_fname):
     """ Extracts the iteration number from a network checkpoint """
     basename = os.path.basename(chkpt_fname)
     return int(re.findall(r"\d+", basename)[0])
 
 
+def to_torch(np_arr, block=True):
+    tensor = torch.from_numpy(np.ascontiguousarray(np_arr))
+    return tensor.cuda(non_blocking=(not block))
+
+
 def masks_empty(sample, mask_names):
     """ Tests whether a sample has any non-masked values """
     return any(not np.any(sample[name]) for name in mask_names)
-
-
-def make_variable(np_arr, requires_grad=True, volatile=False):
-    """ Creates a torch.autograd.Variable from a np array """
-    if not volatile:
-      return Variable(torch.from_numpy(np_arr), requires_grad=requires_grad).cuda()
-    else:
-      return Variable(torch.from_numpy(np_arr), volatile=True).cuda()
 
 
 def set_gpus(gpu_list):

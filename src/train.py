@@ -3,22 +3,20 @@ __doc__ = """
 
 Training.
 
-Nicholas Turner <nturner@cs.princeton.edu>, 2017
+Nicholas Turner <nturner@cs.princeton.edu>, 2017-8
 """
 
 import numpy as np
 import os
 import time
 
-
 import torch
 from torch import autograd
-
 
 import utils
 
 
-required_params = ["max_iter","test_intv","test_iter",
+REQUIRED_PARAMS = ["max_iter","test_intv","test_iter",
                    "avgs_intv","chkpt_intv","expt_dir",
                    "model_dir","log_dir","batch_size",
                    "warm_up"]
@@ -26,7 +24,7 @@ required_params = ["max_iter","test_intv","test_iter",
 
 def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
           train_writer=None, val_writer=None, monitor=None, **params):
-    """ Generalized training functionn """
+    """ Generalized training function """
 
     assert params_defined(params), "Params under-specified"
 
@@ -34,7 +32,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
         monitor = utils.LearningMonitor()
 
     #Determine the names of inputs, labels, masks
-    sample_spec = utils.SampleSpec(sampler.get().keys())
+    sample_spec = utils.SampleSpec(sampler().keys())
     mask_names = sample_spec.get_masks()
 
     print("======= BEGIN TRAINING LOOP ========")
@@ -44,7 +42,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
         # Make sure no mask is empty (data for all tasks)
         sample = fetch_nonempty_sample(sampler, mask_names, params['batch_size'])
 
-        inputs, labels, masks = make_variables(sample, sample_spec, "train")
+        inputs, labels, masks = group_sample(sample, sample_spec, "train")
 
         #Running forward pass
         preds = model(*inputs)
@@ -71,7 +69,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
                            for k in losses.keys() }
             avg_time = round(monitor.get_last_value("iter_time","train"),5)
 
-            write_averages_tb(train_writer, avg_losses, avg_time, i)
+            write_averages(train_writer, avg_losses, avg_time, i)
             print("iter: {}; avg losses = {} (iter_time = {} s on avg)".format(i,avg_losses, avg_time))
 
         if i % params["chkpt_intv"] == 0 and i != last_iter:
@@ -80,7 +78,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
                              params["log_dir"])
 
 
-def write_averages_tb(writer, losses, time, i):
+def write_averages(writer, losses, time, i):
     """ Writes the average losses and iter time to a TensorBoard writer """
     if writer is not None:
         writer.add_scalar("Time Avg", time, i)
@@ -100,8 +98,8 @@ def log_errors(monitor, losses, nmsks, i, phase="train"):
     assert losses.keys() == nmsks.keys(), "Mismatched losses and nmsks"
 
     #Extracting values from Tensors
-    losses = { k : v.data[0] for (k,v) in losses.items() }
-    nmsks  = { k : v.data[0] for (k,v) in nmsks.items()  }
+    losses = {k : v.item() for (k,v) in losses.items()}
+    nmsks  = {k : v.item() for (k,v) in nmsks.items()}
 
     monitor.add_to_num(losses, phase)
     monitor.add_to_denom(nmsks, phase)
@@ -135,7 +133,7 @@ def eval_error(preds, labels, masks, loss_fn, sample_spec):
         label = labels[i]
         label_name = label_names[i]
 
-        if sample_spec.has_mask( label_name ):
+        if sample_spec.has_mask(label_name):
             mask = masks[sample_spec.get_mask_index(label_name)]
 
             losses[label_name] = loss_fn(pred, label, mask)
@@ -143,10 +141,9 @@ def eval_error(preds, labels, masks, loss_fn, sample_spec):
 
         else:
             losses[label_name] = loss_fn(pred, label)
-            #Wrapping the value in a torch Variable to give a
+            #Wrapping the value in a torch Tensor to give a
             # uniform interface (particularly for the log_errors fn)
-            nmsks[label_name]  = autograd.Variable(torch.Tensor(
-                                    [np.prod(label.size())]))
+            nmsks[label_name]  = torch.Tensor( (np.prod(label.size()),) )
 
     return losses, nmsks
 
@@ -155,7 +152,7 @@ def params_defined(params):
     """ Checks whether all required parameters have been defined """
 
     defined_keys = set(params.keys())
-    for param in required_params:
+    for param in REQUIRED_PARAMS:
       if not param in defined_keys:
         print(param)
         return False
@@ -169,16 +166,16 @@ def fetch_nonempty_sample(sampler, masks, num=1):
     voxels for each task
     """
 
-    slices = [sampler.get() for i in xrange(num)]
+    slices = [sampler() for i in range(num)]
 
     # Making sure no masks are empty
     for i in range(num):
         while utils.masks_empty(slices[i], masks):
-          slices[i] = sampler.get()
+          slices[i] = sampler()
 
     # Reshape to add sample dimension (minibatch size = 1).
     for i in range(num):
-        for k, v in slices[i].iteritems():
+        for k, v in slices[i].items():
             slices[i][k] = np.expand_dims(v, axis=0)
 
     # Concatentate the slices into one sample.
@@ -189,20 +186,16 @@ def fetch_nonempty_sample(sampler, masks, num=1):
     return sample
 
 
-def make_variables(sample, sample_spec, phase="train"):
-    """ Creates the Torch variables for a sample """
+def group_sample(sample, sample_spec, phase="train"):
+    """ Creates the Torch tensors for a sample """
 
     inputs = sample_spec.get_inputs()
     labels = sample_spec.get_labels()
     masks  = sample_spec.get_masks()
 
-    if phase == "train":
-        input_vars = [utils.make_variable(sample[k], True)  for k in inputs]
-    elif phase == "test":
-        input_vars = [utils.make_variable(sample[k], volatile=True)  for k in inputs]
-
-    label_vars = [utils.make_variable(sample[k], False) for k in labels]
-    mask_vars  = [utils.make_variable(sample[k], False) for k in masks]
+    input_vars = [utils.to_torch(sample[k], block=True) for k in inputs]
+    label_vars = [utils.to_torch(sample[k], block=False) for k in labels]
+    mask_vars  = [utils.to_torch(sample[k], block=False) for k in masks]
 
     return input_vars, label_vars, mask_vars
 
@@ -211,29 +204,32 @@ def run_validation(model, sampler, num_iters, loss_fn,
                    sample_spec, monitor, writer, i):
 
     mask_names = sample_spec.get_masks()
-    start = time.time()
-    for j in range(num_iters):
-
-        #Make sure no mask is empty (data for all tasks)
-        sample = fetch_nonempty_sample(sampler, mask_names)
-
-        inputs, labels, masks = make_variables(sample, sample_spec, "test")
-
-        #Running forward pass
-        preds = model(*inputs)
-
-        losses, nmsks = eval_error(preds, labels, masks, loss_fn, sample_spec)
-
-        log_errors(monitor, losses, nmsks, i, "test")
-
-        # Elapsed time.
-        elapsed = time.time() - start
-        log_elapsed_time(monitor, elapsed, i, "test")
+    print("------- BEGIN VALIDATION LOOP --------")
+    with torch.no_grad():
         start = time.time()
+        for j in range(num_iters):
+    
+            #Make sure no mask is empty (data for all tasks)
+            sample = fetch_nonempty_sample(sampler, mask_names)
+    
+            inputs, labels, masks = group_sample(sample, sample_spec, "test")
+    
+            #Running forward pass
+            preds = model(*inputs)
+    
+            losses, nmsks = eval_error(preds, labels, masks, loss_fn, sample_spec)
+    
+            log_errors(monitor, losses, nmsks, i, "test")
+    
+            # Elapsed time.
+            elapsed = time.time() - start
+            log_elapsed_time(monitor, elapsed, i, "test")
+            start = time.time()
 
     monitor.compute_avgs(i, "test")
     avg_losses = { k : round(monitor.get_last_value(k, "test"),5) for k in losses.keys() }
     avg_time = round(monitor.get_last_value("iter_time","test"),5)
-    write_averages_tb(writer, avg_losses, avg_time, i)
+    write_averages(writer, avg_losses, avg_time, i)
 
     print("TEST: {} avg losses = {} (elapsed = {} s avg)".format(i, avg_losses, avg_time))
+    print("------- END VALIDATION LOOP --------")

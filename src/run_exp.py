@@ -17,8 +17,6 @@ import tensorboardX
 import utils
 import train
 import loss
-import models
-import samplers
 
 
 def main(**args):
@@ -42,13 +40,13 @@ def main(**args):
 
 
 def fill_params(expt_name, chkpt_num, batch_sz, gpus,
-                sampler_name, model_name, **args):
+                sampler_fname, model_fname, augmentor_fname, **args):
 
     params = {}
 
     #Model params
     params["in_dim"]       = 1
-    params["output_spec"]  = collections.OrderedDict(psd_label=1)
+    params["output_spec"]  = collections.OrderedDict(synapse_label=1)
     params["depth"]        = 4
     params["batch_norm"]   = True
 
@@ -68,6 +66,9 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     assert os.path.isdir(params["data_dir"]),"nonexistent data directory"
     params["train_sets"]   = ["K_val"]
     params["val_sets"]     = ["K_val"]
+    params["patchsz"]      = (18,160,160)
+    params["sampler_spec"] = dict(input=params["patchsz"], 
+                                  synapse_label=params["patchsz"])
 
     #GPUS
     params["gpus"] = gpus
@@ -82,25 +83,25 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["tb_val"]     = os.path.join(params["expt_dir"], "tb/val")
 
     #Use-specific Module imports
-    sampler_module = getattr(samplers,sampler_name)
-    params["sampler_class"] = sampler_module.Sampler
-    model_module = getattr(models,model_name)
-    params["model_class"]   = model_module.Model
+    params["model_class"]   = utils.load_source(model_fname).Model
+    params["sampler_class"] = utils.load_source(sampler_fname).Sampler
+    params["augmentor_constr"] = utils.load_source(augmentor_fname).get_augmentation
 
     #"Schema" for turning the parameters above into arguments
     # for the model class
-    params["model_args"]     = [ params["in_dim"], params["output_spec"],
-                                 params["depth"] ]
-    params["model_kwargs"]   = { "bn" : params["batch_norm"] }
+    params["model_args"]     = [params["in_dim"], params["output_spec"],
+                                params["depth"]]
+    params["model_kwargs"]   = {"bn" : params["batch_norm"]}
 
     #modules used for record-keeping
-    params["modules_used"] = [__file__, model_module.__file__,
-                              sampler_module.__file__, "loss.py"]
+    params["modules_used"] = [__file__, model_fname, sampler_fname,
+                              augmentor_fname, "loss.py"]
 
     return params
 
 
-def start_training(model_class, model_args, model_kwargs, sampler_class,
+def start_training(model_class, model_args, model_kwargs, 
+                   sampler_class, sampler_spec, augmentor_constr,
                    chkpt_num, lr, train_sets, val_sets, data_dir,
                    model_dir, log_dir, tb_train, tb_val,
                    **params):
@@ -115,12 +116,18 @@ def start_training(model_class, model_args, model_kwargs, sampler_class,
     if chkpt_num != 0:
         utils.load_chkpt(net, monitor, chkpt_num, model_dir, log_dir)
 
-    #DataProvider Sampler
-    train_sampler = utils.AsyncSampler(sampler_class(data_dir, dsets=train_sets,
-                                                     mode="train"))
+    #DataProvider Stuff
+    train_aug = augmentor_constr(True)
+    train_sampler = utils.AsyncSampler(sampler_class(data_dir, sampler_spec,
+                                                     vols=train_sets,
+                                                     mode="train",
+                                                     aug=train_aug))
 
-    val_sampler   = utils.AsyncSampler(sampler_class(data_dir, dsets=val_sets,
-                                                     mode="val"))
+    val_aug = augmentor_constr(False)
+    val_sampler   = utils.AsyncSampler(sampler_class(data_dir, sampler_spec,
+                                                     vols=val_sets,
+                                                     mode="val",
+                                                     aug=val_aug))
 
     loss_fn = loss.BinomialCrossEntropyWithLogits()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
@@ -140,10 +147,12 @@ if __name__ == "__main__":
 
     parser.add_argument("expt_name",
                         help="Experiment Name")
-    parser.add_argument("sampler_name",
-                        help="DataProvider Sampler name")
-    parser.add_argument("model_name",
-                        help="Model Template name")
+    parser.add_argument("model_fname",
+                        help="Model Template filename")
+    parser.add_argument("sampler_fname",
+                        help="DataProvider Sampler filename")
+    parser.add_argument("augmentor_fname",
+                        help="Data Augmentor module filename")
     parser.add_argument("--batch_sz",  type=int, default=1,
                         help="Batch size for each sample")
     parser.add_argument("--chkpt_num", type=int, default=0,
