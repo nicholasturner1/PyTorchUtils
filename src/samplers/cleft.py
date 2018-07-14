@@ -25,7 +25,7 @@ class Sampler(object):
             dp.add_dataset(self.build_dataset(datadir, vol))
         dp.set_augment(aug)
         dp.set_imgs(["input"])
-        dp.set_segs(["synapse_label"])
+        dp.set_segs(["cleft_label"])
         self.dataprovider = dp
 
     def build_dataset(self, datadir, vol):
@@ -39,7 +39,7 @@ class Sampler(object):
         # Create Dataset.
         dset = Dataset()
         dset.add_data(key='input', data=img)
-        dset.add_data(key='synapse_label', data=clf)
+        dset.add_data(key='cleft_label', data=clf)
         return dset
 
 
