@@ -43,12 +43,12 @@ class SampleSpec(object):
 
 
     def get_mask_name(self, label_name):
-        assert self._mask_lookup.has_key(label_name)
+        assert label_name in self._mask_lookup
         return self._mask_lookup[label_name]
 
 
     def get_mask_index(self, label_name):
-        assert self._mask_lookup.has_key(label_name)
+        assert label_name in self._mask_lookup
         return self._masks.index(self._mask_lookup[label_name])
 
 
