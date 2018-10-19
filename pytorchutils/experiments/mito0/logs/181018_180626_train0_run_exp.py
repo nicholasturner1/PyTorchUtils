@@ -51,8 +51,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
 
     #Training procedure params
     params["max_iter"]    = 10000000
-    #params["lr"]          = 0.0001 #-> 65k
-    params["lr"]          = 0.00001
+    params["lr"]          = 0.0001
     params["test_intv"]   = 1000
     params["test_iter"]   = 100
     params["avgs_intv"]   = 200

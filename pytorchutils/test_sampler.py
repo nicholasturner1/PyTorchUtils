@@ -1,5 +1,4 @@
-import u
-import imp 
+import utils
 
 from sys import argv
 
@@ -7,20 +6,24 @@ from sys import argv
 # the way you expect them to
 
 SAMPLER_FNAME = argv[1]
-NUM_SAMPLES   = int(argv[2]) if len(argv) > 2 else 3
+AUGMENTOR_FNAME = argv[2]
+NUM_SAMPLES = int(argv[3]) if len(argv) > 3 else 3
 
 
-sampler = imp.load_source("S",SAMPLER_FNAME)
+Sampler = utils.load_source(SAMPLER_FNAME).Sampler
+Augmentor = utils.load_source(AUGMENTOR_FNAME).get_augmentation
 
-s = sampler.Sampler("~/research/datasets/SNEMI3D/", dsets=["AC4"],
-                    mode="train", patchsz=(18,160,160))
+
+patchsz = (1,18,160,160)
+
+s = Sampler("~/seungmount/research/agataf/datasets/", patchsz, 
+            vols=["vol501"], aug=Augmentor(True))
 
 for i in range(NUM_SAMPLES):
 
-    samp = s(imgs=["input"])
-
+    samp = s()
 
     for (k,v) in samp.items():
         for j in range(v.shape[0]):
-          u.write_file(v[j,:,:,:], "tests/sample{}_{}{}.h5".format(i,k,j))
+          utils.write_h5(v[j,:,:,:], "tests/sample{}_{}{}.h5".format(i,k,j))
 

@@ -1,0 +1,31 @@
+in_spec;{'input': (1, 16, 160, 160)}
+output_spec;OrderedDict([('mito', (1, 16, 160, 160))])
+width;[32, 40, 80]
+max_iter;10000000
+lr;0.0001
+test_intv;1000
+test_iter;100
+avgs_intv;200
+chkpt_intv;5000
+warm_up;200
+chkpt_num;0
+batch_size;1
+data_dir;/usr/people/nturner/seungmount/research/agataf/datasets/
+train_sets;['stitched_vol19-vol34', 'vol401', 'vol501', 'vol701', 'vol702', 'vol703', 'vol705']
+val_sets;['stitched_vol40-vol41', 'vol104', 'vol502', 'vol503']
+test_sets;['golden_volume']
+patchsz;(16, 160, 160)
+gpus;['0']
+expt_name;mito0
+expt_dir;experiments/mito0
+model_dir;experiments/mito0/models
+log_dir;experiments/mito0/logs
+fwd_dir;experiments/mito0/forward
+tb_train;experiments/mito0/tb/train
+tb_val;experiments/mito0/tb/val
+model_class;<class 'module.Model'>
+sampler_class;<class 'module.Sampler'>
+augmentor_constr;<function get_augmentation at 0x7f23ca13c598>
+model_args;[{'input': (1, 16, 160, 160)}, OrderedDict([('mito', (1, 16, 160, 160))]), [32, 40, 80]]
+model_kwargs;{}
+modules_used;['run_exp.py', 'models/RSUNet.py', 'samplers/mito.py', 'augmentors/mito_181018.py', 'loss.py']
