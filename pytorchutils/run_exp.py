@@ -46,7 +46,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
 
     #Model params
     params["in_dim"]       = 1
-    params["output_spec"]  = collections.OrderedDict(synapse_label=1)
+    params["output_spec"]  = collections.OrderedDict(cleft=1)
     params["depth"]        = 4
     params["batch_norm"]   = True
 
@@ -56,7 +56,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["test_intv"]   = 100
     params["test_iter"]   = 10
     params["avgs_intv"]   = 50
-    params["chkpt_intv"]  = 10000
+    params["chkpt_intv"]  = 10
     params["warm_up"]     = 50
     params["chkpt_num"]   = chkpt_num
     params["batch_size"]  = batch_sz
@@ -68,7 +68,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["val_sets"]     = ["K_val"]
     params["patchsz"]      = (18,160,160)
     params["sampler_spec"] = dict(input=params["patchsz"], 
-                                  synapse_label=params["patchsz"])
+                                  cleft_label=params["patchsz"])
 
     #GPUS
     params["gpus"] = gpus

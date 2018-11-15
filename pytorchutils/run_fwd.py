@@ -5,11 +5,10 @@ import collections
 
 import torch
 from torch.nn import functional as F
-import dataprovider as dp
+import dataprovider3 as dp
 
 import forward
 import utils
-import models
 
 
 def main(noeval, **args):
@@ -39,13 +38,13 @@ def main(noeval, **args):
 
 
 def fill_params(expt_name, chkpt_num, gpus,
-                nobn, model_name, dset_names, tag):
+                nobn, model_fname, dset_names, tag):
 
     params = {}
 
     #Model params
     params["in_dim"]      = 1
-    params["output_spec"] = collections.OrderedDict(psd_label=1)
+    params["output_spec"] = collections.OrderedDict(cleft=1)
     params["depth"]       = 4
     params["batch_norm"]  = not(nobn)
     params["activation"]  = F.sigmoid
@@ -73,17 +72,16 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["scan_params"] = dict(stride=(0.5,0.5,0.5), blend="bump")
 
     #Use-specific Module imports
-    model_module = getattr(models,model_name)
-    params["model_class"]  = model_module.Model
+    params["model_class"] = utils.load_source(model_fname).Model
 
     #"Schema" for turning the parameters above into arguments
     # for the model class
     params["model_args"]   = [params["in_dim"], params["output_spec"],
-                             params["depth"] ]
-    params["model_kwargs"] = { "bn" : params["batch_norm"] }
+                              params["depth"]]
+    params["model_kwargs"] = {"bn" : params["batch_norm"]}
 
     #Modules used for record-keeping
-    params["modules_used"] = [__file__, model_module.__file__, "layers.py"]
+    params["modules_used"] = [__file__, model_fname, "layers.py"]
 
     return params
 
@@ -93,23 +91,22 @@ def make_forward_scanner(dset_name, data_dir, input_spec,
     """ Creates a DataProvider ForwardScanner from a dset name """
 
     # Reading EM image
-    img = utils.read_h5(os.path.join(data_dir, dset_name + "_img.h5"))
+    img = utils.read_h5(os.path.join(data_dir, f"{dset_name}_img.h5"))
     img = (img / 255.).astype("float32")
 
     # Creating DataProvider Dataset
-    vd = dp.VolumeDataset()
+    vd = dp.Dataset(spec=input_spec)
 
-    vd.add_raw_data(key="input", data=img)
-    vd.set_spec(input_spec)
+    vd.add_data(key="input", data=img)
 
     # Returning DataProvider ForwardScanner
-    return dp.ForwardScanner(vd, scan_spec, params=scan_params)
+    return dp.ForwardScanner(vd, scan_spec, **scan_params)
 
 
 def save_output(output, dset_name, chkpt_num, fwd_dir, output_tag, **params):
     """ Saves the volumes within a DataProvider ForwardScanner """
 
-    for k in output.outputs.data.iterkeys():
+    for k in output.outputs.data:
 
         output_data = output.outputs.get_data(k)
 
@@ -119,9 +116,9 @@ def save_output(output, dset_name, chkpt_num, fwd_dir, output_tag, **params):
             basename = "{}_{}_{}_{}.h5".format(dset_name, k, 
                                                chkpt_num, output_tag)
 
-        full_fname = os.path.join( fwd_dir, basename )
+        full_fname = os.path.join(fwd_dir, basename)
 
-        utils.write_h5(output_data[0,:,:,:], full_fname)
+        utils.write_h5(output_data, full_fname)
 
 
 #============================================================
@@ -136,7 +133,7 @@ if __name__ == "__main__":
 
     parser.add_argument("expt_name",
                         help="Experiment Name")
-    parser.add_argument("model_name",
+    parser.add_argument("model_fname",
                         help="Model Template Name")
     parser.add_argument("chkpt_num", type=int,
                         help="Checkpoint Number")
