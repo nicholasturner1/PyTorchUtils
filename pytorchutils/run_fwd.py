@@ -43,10 +43,9 @@ def fill_params(expt_name, chkpt_num, gpus,
     params = {}
 
     #Model params
-    params["in_dim"]      = 1
-    params["output_spec"] = collections.OrderedDict(cleft=1)
-    params["depth"]       = 4
-    params["batch_norm"]  = not(nobn)
+    params["in_spec"]     = dict(input=(1,18,160,160))
+    params["output_spec"] = collections.OrderedDict(cleft=(1,18,160,160))
+    params["width"]       = [32, 40, 80]
     params["activation"]  = F.sigmoid
     params["chkpt_num"]   = chkpt_num
 
@@ -76,9 +75,9 @@ def fill_params(expt_name, chkpt_num, gpus,
 
     #"Schema" for turning the parameters above into arguments
     # for the model class
-    params["model_args"]   = [params["in_dim"], params["output_spec"],
-                              params["depth"]]
-    params["model_kwargs"] = {"bn" : params["batch_norm"]}
+    params["model_args"]   = [params["in_spec"], params["output_spec"],
+                              params["width"]]
+    params["model_kwargs"] = {}
 
     #Modules used for record-keeping
     params["modules_used"] = [__file__, model_fname, "layers.py"]
