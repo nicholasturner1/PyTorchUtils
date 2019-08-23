@@ -93,8 +93,8 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["model_kwargs"] = {}
 
     # Modules used for record-keeping
-    params["modules_used"] = [__file__, model_fname, sampler_fname,
-                              augmentor_fname, "loss.py"]
+    params["modules_used"] = [__file__, model_fname,
+                              sampler_fname, augmentor_fname]
 
     return params
 

@@ -46,5 +46,4 @@ class Sampler(object):
 def read_h5(fname, dset_name="/main"):
     assert os.path.isfile(fname)
     with h5py.File(fname) as f:
-        return f[dset_name].value
-
+        return f[dset_name][()]
