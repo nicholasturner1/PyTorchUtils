@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-__doc__ = """
-
+"""
 Asynchronous Sampler
 
 Nicholas Turner <nturner@cs.princeton.edu>, 2017-8

@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-__doc__ = """
-
+"""
 Miscellaneous Utils
 
 Nicholas Turner <nturner@cs.princeton.edu>, 2017

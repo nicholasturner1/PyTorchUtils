@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-__doc__ = """
-
+"""
 Sample Specification
 
 Nicholas Turner <nturner@cs.princeton.edu>, 2017

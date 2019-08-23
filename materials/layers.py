@@ -1,7 +1,6 @@
-#!/usr/bin/env
-__doc__ = """
-
+"""
 Basic building block layers for constructing nets implemented in PyTorch.
+LARGELY UNUSED AND DEPRECATED NOW
 
 Nicholas Turner <nturner@cs.princeton.edu>, 2017
 Based on a similar module by

@@ -1,3 +1,9 @@
+"""
+Class Rebalancing
+
+Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
+"""
+
 import torch
 import numpy as np
 

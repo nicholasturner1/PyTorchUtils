@@ -1,10 +1,16 @@
-import u
-import imp 
+"""
+Taking test samples
+
+Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
+"""
+
+from pytu import u
+from pytu import imp 
 
 from sys import argv
 
-#Quick script for testing that your samples look
-# the way you expect them to
+# Quick script for testing that your samples look
+#  the way you expect them to
 
 SAMPLER_FNAME = argv[1]
 NUM_SAMPLES   = int(argv[2]) if len(argv) > 2 else 3
