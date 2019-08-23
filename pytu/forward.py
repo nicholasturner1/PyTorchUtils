@@ -9,7 +9,7 @@ import time
 import torch
 import numpy as np
 
-import utils
+from . import utils
 
 
 def forward(net, scanner, scan_spec, activation=None):

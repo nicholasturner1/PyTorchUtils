@@ -1,6 +1,4 @@
-#!/usr/bin/env python2
-__doc__ = """
-
+"""
 Loss functions.
 
 Nicholas Turner <nturner.cs@princeton.edu>, 2017
@@ -10,7 +8,8 @@ import torch
 from torch import nn
 import numpy as np
 
-from balance import gunpowder_balance
+from .balance import gunpowder_balance
+
 
 class BinomialCrossEntropyWithLogits(nn.Module):
     """ 

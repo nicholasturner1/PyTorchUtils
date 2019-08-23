@@ -11,7 +11,7 @@ import time
 import torch
 from torch import autograd
 
-import utils
+from . import utils
 
 
 REQUIRED_PARAMS = ["max_iter","test_intv","test_iter",
