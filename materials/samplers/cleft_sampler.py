@@ -1,45 +1,28 @@
 import os
-import itertools
 
-import numpy as np
 import h5py
-import torch
 
 from augmentor import Augment
 from dataprovider3 import DataProvider, Dataset
 
 
-class Sampler(torch.utils.data.IterableDataset):
+class Sampler(object):
 
-    def __init__(self, datadir, spec, vols=[], mode="train", aug=None, seed=None):
-        assert mode in ["train","val"], f"invalid mode: {mode}"
-
-        super(Sampler).__init__()
-        self.seed = seed
+    def __init__(self, datadir, spec, vols=[], mode="train", aug=None):
+        assert mode in ["train","val"], "invalid mode:{}".format(mode)
+        datadir = os.path.expanduser(datadir)
         self.build(datadir, vols, spec, aug)
 
-    def __iter__(self):
-        """
-        Sets RNG seed, and feeds an iterator to the DataLoader.
-        Shouldn't need to modify this
-        """
-        worker_info = torch.utils.data.get_worker_info()
-        if worker_info is None:  # single process
-            np.random.seed(self.seed)
-        else:
-            np.random.seed(self.seed * worker_info.id)
-        
-        return (self.sample() for _ in itertools.count())
+    def __call__(self):
+        return self.dataprovider()
 
     def build(self, datadir, vols, spec, aug):
-        """Builds an internal instance of the DataProvider class"""
         print("Spec")
         print(spec)
         dp = DataProvider(spec)
         for vol in vols:
             print("Vol: {}".format(vol))
             dp.add_dataset(self.build_dataset(datadir, vol))
-
         dp.set_augment(aug)
         dp.set_imgs(["input"])
         dp.set_segs(["cleft_label"])
@@ -58,13 +41,6 @@ class Sampler(torch.utils.data.IterableDataset):
         dset.add_data(key='input', data=img)
         dset.add_data(key='cleft_label', data=clf)
         return dset
-
-    def sample(self):
-        """
-        Pulls a sample from the DataProvider class.
-        One can add extra functionality here for post-processing, etc.
-        """
-        return self.dataprovider()
 
 
 def read_h5(fname, dset_name="/main"):
