@@ -27,7 +27,10 @@ class Sampler(torch.utils.data.IterableDataset):
         if worker_info is None:  # single process
             np.random.seed(self.seed)
         else:
-            np.random.seed(self.seed * worker_info.id)
+            if self.seed is not None:
+                np.random.seed(self.seed * worker_info.id)
+            else:
+                np.random.seed(worker_info.id)
         
         return (self.sample() for _ in itertools.count())
 
