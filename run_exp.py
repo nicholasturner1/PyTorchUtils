@@ -99,41 +99,28 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     return params
 
 
-def start_training(model_class, model_args, model_kwargs,
-                   sampler_class, sampler_spec, augmentor_constr,
-                   chkpt_num, lr, train_sets, val_sets, data_dir,
-                   model_dir, log_dir, tb_train, tb_val,
-                   **params):
+def start_training(tb_train, tb_val, lr, chkpt_num, lr, **params):
 
     # PyTorch Model
-    net = utils.create_network(model_class, model_args, model_kwargs)
+    net = utils.create_network(**params)
     train_writer = tensorboardX.SummaryWriter(tb_train)
     val_writer = tensorboardX.SummaryWriter(tb_val)
     monitor = utils.LearningMonitor()
 
     # Loading model checkpoint (if applicable)
     if chkpt_num != 0:
-        utils.load_chkpt(net, monitor, chkpt_num, model_dir, log_dir)
+        net, monitor = utils.load_chkpt(net, monitor, chkpt_num, **params)
 
-    # DataProvider Stuff
-    train_aug = augmentor_constr(True)
-    train_sampler = utils.AsyncSampler(sampler_class(data_dir, sampler_spec,
-                                                     vols=train_sets,
-                                                     mode="train",
-                                                     aug=train_aug))
-
-    val_aug = augmentor_constr(False)
-    val_sampler = utils.AsyncSampler(
-                      sampler_class(data_dir, sampler_spec,
-                                    vols=val_sets, mode="val", aug=val_aug))
+    # Dataset Sampling
+    train_loader = utils.load_data(**params, train=True)
+    val_loader = utils.load_data(**params, train=False)
 
     loss_fn = loss.BinomialCrossEntropyWithLogits()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
 
-    train.train(net, loss_fn, optimizer, train_sampler, val_sampler,
+    train.train(net, loss_fn, optimizer, train_loader, val_loader,
                 train_writer=train_writer, val_writer=val_writer,
-                last_iter=chkpt_num, model_dir=model_dir, log_dir=log_dir,
-                monitor=monitor,
+                last_iter=chkpt_num, monitor=monitor,
                 **params)
 
 
@@ -144,13 +131,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument("expt_name",
-                        help="Experiment Name")
+                        help="Experiment name")
     parser.add_argument("model_fname",
-                        help="Model Template filename")
+                        help="Model architecture filename")
     parser.add_argument("sampler_fname",
-                        help="DataProvider Sampler filename")
+                        help="Sampler filename")
     parser.add_argument("augmentor_fname",
-                        help="Data Augmentor module filename")
+                        help="Data augmentor module filename")
     parser.add_argument("--batch_sz",  type=int, default=1,
                         help="Batch size for each sample")
     parser.add_argument("--chkpt_num", type=int, default=0,

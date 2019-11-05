@@ -13,6 +13,7 @@ import re
 
 import torch
 from torch.autograd import Variable
+from torch.utils.data import DataLoader
 import numpy as np
 import h5py
 
@@ -21,7 +22,7 @@ __all__ = ["timestamp",
            "make_required_dirs","log_tagged_modules","log_params",
            "create_network","load_network","load_learning_monitor",
            "save_chkpt","load_chkpt","iter_from_chkpt_fname",
-           "load_source",
+           "load_data", "load_source",
            "to_torch", "masks_empty",
            "read_h5","write_h5",
            "set_gpus", "init_seed"]
@@ -59,7 +60,7 @@ def log_tagged_modules(module_fnames, log_dir, phase, chkpt_num=0, tstamp=None):
 
     for fname in module_fnames:
         basename = os.path.basename(fname)
-        output_basename = "{}_{}{}_{}".format(tstamp, phase, chkpt_num, basename)
+        output_basename = f"{tstamp}_{phase}{chkpt_num}_{basename}"
 
         shutil.copyfile(fname, os.path.join(log_dir, output_basename))
 
@@ -102,13 +103,31 @@ def load_learning_monitor(learning_monitor, chkpt_num, log_dir):
     return learning_monitor
 
 
-def load_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
+def load_chkpt(model, learning_monitor, chkpt_num,
+               model_dir, log_dir, **params):
 
     m = load_network(model, chkpt_num, model_dir)
 
     lm = load_learning_monitor(learning_monitor, chkpt_num, log_dir)
 
     return m, lm
+
+
+def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
+              train_sets, val_sets, batch_size, num_workers, train=True,
+              **params):
+    aug = augmentor_constr(train)
+    if train:
+        sampler = sampler_class(data_dir, sampler_spec, train_sets,
+                                mode="train", aug=aug)
+    else:
+        sampler = sampler_class(data_dir, sampler_spec, val_sets,
+                                mode="val", aug=aug)
+
+    loader = DataLoader(sampler, batch_size=batch_size,
+                        num_workers=num_workers, pin_memory=True)
+
+    return iter(loader)
 
 
 def load_source(fname, module_name="module"):
