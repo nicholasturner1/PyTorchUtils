@@ -67,6 +67,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["patchsz"] = (18, 160, 160)
     params["sampler_spec"] = dict(input=params["patchsz"],
                                   cleft_label=params["patchsz"])
+    params["num_workers"] = batch_sz
 
     # GPUS
     params["gpus"] = gpus
@@ -99,7 +100,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     return params
 
 
-def start_training(tb_train, tb_val, lr, chkpt_num, lr, **params):
+def start_training(tb_train, tb_val, lr, chkpt_num, **params):
 
     # PyTorch Model
     net = utils.create_network(**params)

@@ -1,7 +1,7 @@
 """
 Training
 
-Nicholas Turner <nturner@cs.princeton.edu>, 2017-8
+Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
 """
 import time
 
@@ -27,7 +27,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
         monitor = utils.LearningMonitor()
 
     # Determine the names of inputs, labels, masks
-    sample_spec = utils.SampleSpec(sampler().keys())
+    sample_spec = utils.SampleSpec(next(sampler).keys())
     mask_names = sample_spec.get_masks()
 
     print("======= BEGIN TRAINING LOOP ========")
