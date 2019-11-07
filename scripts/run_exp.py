@@ -108,18 +108,19 @@ def start_training(tb_train, tb_val, lr, chkpt_num, **params):
     val_writer = tensorboardX.SummaryWriter(tb_val)
     monitor = utils.LearningMonitor()
 
+    loss_fn = loss.BinomialCrossEntropyWithLogits()
+    opt = torch.optim.Adam(net.parameters(), lr=lr)
+
     # Loading model checkpoint (if applicable)
     if chkpt_num != 0:
-        net, monitor = utils.load_chkpt(net, monitor, chkpt_num, **params)
+        net, monitor, opt = utils.load_chkpt(
+                                net, monitor, opt, chkpt_num, **params)
 
     # Dataset Sampling
     train_loader = utils.load_data(**params, train=True)
     val_loader = utils.load_data(**params, train=False)
 
-    loss_fn = loss.BinomialCrossEntropyWithLogits()
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-
-    train.train(net, loss_fn, optimizer, train_loader, val_loader,
+    train.train(net, loss_fn, opt, train_loader, val_loader,
                 train_writer=train_writer, val_writer=val_writer,
                 last_iter=chkpt_num, monitor=monitor,
                 **params)

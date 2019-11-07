@@ -12,19 +12,18 @@ import os
 import re
 
 import torch
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 import numpy as np
 import h5py
 
 
 __all__ = ["timestamp",
-           "make_required_dirs","log_tagged_modules","log_params",
-           "create_network","load_network","load_learning_monitor",
-           "save_chkpt","load_chkpt","iter_from_chkpt_fname",
+           "make_required_dirs", "log_tagged_modules", "log_params",
+           "create_network", "load_network", "load_learning_monitor",
+           "save_chkpt", "load_chkpt", "iter_from_chkpt_fname",
            "load_data", "load_source",
            "to_torch", "masks_empty",
-           "read_h5","write_h5",
+           "read_h5", "write_h5",
            "set_gpus", "init_seed"]
 
 
@@ -32,7 +31,8 @@ def timestamp():
     return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
 
 
-def make_required_dirs(model_dir, log_dir, fwd_dir, tb_train, tb_val, **params):
+def make_required_dirs(model_dir, log_dir, fwd_dir,
+                       tb_train, tb_val, **params):
 
     for d in [model_dir, log_dir, fwd_dir, tb_train, tb_val]:
         if not os.path.isdir(d):
@@ -47,14 +47,15 @@ def log_params(param_dict, tstamp=None, log_dir=None):
 
     tstamp = tstamp if tstamp is not None else timestamp()
 
-    output_basename = "{}_params.csv".format(tstamp)
+    output_basename = f"{tstamp}_params.csv"
 
-    with open(os.path.join(log_dir,output_basename), "w+") as f:
-        for (k,v) in param_dict.items():
-            f.write("{k};{v}\n".format(k=k,v=v))
+    with open(os.path.join(log_dir, output_basename), "w+") as f:
+        for (k, v) in param_dict.items():
+            f.write(f"{k};{v}\n")
 
 
-def log_tagged_modules(module_fnames, log_dir, phase, chkpt_num=0, tstamp=None):
+def log_tagged_modules(module_fnames, log_dir,
+                       phase, chkpt_num=0, tstamp=None):
 
     tstamp = tstamp if tstamp is not None else timestamp()
 
@@ -65,21 +66,24 @@ def log_tagged_modules(module_fnames, log_dir, phase, chkpt_num=0, tstamp=None):
         shutil.copyfile(fname, os.path.join(log_dir, output_basename))
 
 
-def save_chkpt(model, learning_monitor, chkpt_num, model_dir, log_dir):
-
+def save_chkpt(model, learning_monitor, opt, chkpt_num, model_dir, log_dir):
     # Save model
-    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
+    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.chkpt")
     torch.save(model.module.state_dict(), chkpt_fname)
 
+    # Save optimizer state
+    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.chkpt")
+    torch.save(opt.state_dict(), opt_fname)
+
     # Save learning monitor
-    lm_fname = os.path.join(log_dir, "stats{}.h5".format(chkpt_num))
+    lm_fname = os.path.join(log_dir, f"stats{chkpt_num}.h5")
     learning_monitor.save(lm_fname, chkpt_num)
 
 
 def create_network(model_class, model_args, model_kwargs,
                    chkpt_num=0, model_dir=None, **params):
-
-    net = torch.nn.DataParallel(model_class(*model_args, **model_kwargs)).cuda()
+    net = torch.nn.DataParallel(
+              model_class(*model_args, **model_kwargs)).cuda()
 
     if chkpt_num > 0:
         load_network(net, chkpt_num, model_dir)
@@ -88,29 +92,36 @@ def create_network(model_class, model_args, model_kwargs,
 
 
 def load_network(model, chkpt_num, model_dir):
-
-    chkpt_fname = os.path.join(model_dir, "model{}.chkpt".format(chkpt_num))
+    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.chkpt")
     model.module.load_state_dict(torch.load(chkpt_fname))
 
     return model
 
 
+def load_optimizer(opt, chkpt_num, log_dir):
+    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.chkpt")
+    opt.load_state_dict(torch.load(opt_fname))
+
+    return opt
+
+
 def load_learning_monitor(learning_monitor, chkpt_num, log_dir):
 
-    lm_fname = os.path.join(log_dir, "stats{}.h5".format(chkpt_num))
+    lm_fname = os.path.join(log_dir, f"stats{chkpt_num}.h5")
     learning_monitor.load(lm_fname)
 
     return learning_monitor
 
 
-def load_chkpt(model, learning_monitor, chkpt_num,
+def load_chkpt(model, learning_monitor, opt, chkpt_num,
                model_dir, log_dir, **params):
 
     m = load_network(model, chkpt_num, model_dir)
+    opt = load_optimizer(opt, chkpt_num, log_dir)
 
     lm = load_learning_monitor(learning_monitor, chkpt_num, log_dir)
 
-    return m, lm
+    return m, lm, opt
 
 
 def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
@@ -181,7 +192,7 @@ def read_h5(fname):
 def write_h5(data, fname):
 
     if os.path.exists(fname):
-      os.remove(fname)
+        os.remove(fname)
 
     with h5py.File(fname) as f:
-        f.create_dataset("/main",data=data)
+        f.create_dataset("/main", data=data)
