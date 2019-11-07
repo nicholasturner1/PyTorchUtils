@@ -45,16 +45,16 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["in_spec"] = dict(input=(1, 18, 160, 160))
     params["output_spec"] = collections.OrderedDict(
                                 cleft=(1, 18, 160, 160))
-    params["width"] = [32, 40, 80]
+    params["width"] = [16, 32, 64]
 
     # Training procedure params
     params["max_iter"] = 1000000
     params["lr"] = 0.00001
-    params["test_intv"] = 100
+    params["test_intv"] = 1000
     params["test_iter"] = 10
     params["avgs_intv"] = 50
-    params["chkpt_intv"] = 10
-    params["warm_up"] = 50
+    params["chkpt_intv"] = 100
+    params["warm_up"] = 20
     params["chkpt_num"] = chkpt_num
     params["batch_size"] = batch_sz
 
@@ -67,7 +67,7 @@ def fill_params(expt_name, chkpt_num, batch_sz, gpus,
     params["patchsz"] = (18, 160, 160)
     params["sampler_spec"] = dict(input=params["patchsz"],
                                   cleft_label=params["patchsz"])
-    params["num_workers"] = batch_sz
+    params["num_workers"] = 4*batch_sz
 
     # GPUS
     params["gpus"] = gpus
