@@ -173,7 +173,7 @@ def set_gpus(gpu_list):
 def read_h5(fname):
 
     with h5py.File(fname) as f:
-        d = f["/main"].value
+        d = f["/main"][()]
 
     return d
 

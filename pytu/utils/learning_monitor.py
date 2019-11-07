@@ -68,11 +68,11 @@ class LearningMonitor:
         # Train stats.
         train = f['/train']
         for key, data in train.items():
-            self.train[key] = list(data.value)
+            self.train[key] = list(data[()])
         # Test stats.
         test = f['/test']
         for key, data in test.items():
-            self.test[key] = list(data.value)
+            self.test[key] = list(data[()])
         f.close()
 
 
