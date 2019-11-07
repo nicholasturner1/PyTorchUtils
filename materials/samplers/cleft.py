@@ -5,14 +5,14 @@ import numpy as np
 import h5py
 import torch
 
-from augmentor import Augment
 from dataprovider3 import DataProvider, Dataset
 
 
 class Sampler(torch.utils.data.IterableDataset):
 
-    def __init__(self, datadir, spec, vols=[], mode="train", aug=None, seed=None):
-        assert mode in ["train","val"], f"invalid mode: {mode}"
+    def __init__(self, datadir, spec, vols=[],
+                 mode="train", aug=None, seed=None):
+        assert mode in ["train", "val"], f"invalid mode: {mode}"
 
         super(Sampler, self).__init__()
         self.seed = seed
@@ -31,7 +31,7 @@ class Sampler(torch.utils.data.IterableDataset):
                 np.random.seed(self.seed * (worker_info.id + 1))
             else:
                 np.random.seed(worker_info.id + 1)
-        
+
         return (self.sample() for _ in itertools.count())
 
     def build(self, datadir, vols, spec, aug):
@@ -52,7 +52,7 @@ class Sampler(torch.utils.data.IterableDataset):
         img = read_h5(os.path.join(datadir, vol + "_img.h5"))
         clf = read_h5(os.path.join(datadir, vol + "_syn.h5")).astype("float32")
 
-        #Preprocessing
+        # Preprocessing
         img = (img / 255.).astype("float32")
         clf[clf != 0] = 1
 

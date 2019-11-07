@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-__doc__ = """
+"""
 Augmentor - Flip and Rotate Only
 """
 

@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-__doc__ = """
+"""
 Augmentor - No Box Occlusion
 """
 
