@@ -5,7 +5,6 @@ Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
 """
 import time
 
-import numpy as np
 import torch
 
 from . import utils
@@ -30,6 +29,8 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
     sample_spec = utils.SampleSpec(next(sampler).keys())
     mask_names = sample_spec.get_masks()
 
+    model_w_loss = utils.wrapmodel(model, loss_fn, sample_spec)
+
     print("======= BEGIN TRAINING LOOP ========")
     for i in range(last_iter, params['max_iter']):
         start = time.time()
@@ -39,13 +40,11 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
         inputs, labels, masks = group_sample(sample, sample_spec, "train")
 
-        # Running forward pass
-        preds = model(*inputs)
+        # Running forward pass, evaluating loss fn
+        losses, nmsks = model_w_loss(inputs, labels, masks)
 
-        losses, nmsks = eval_error(preds, labels, masks, loss_fn, sample_spec)
-
+        losses, nmsks = sum_to_scalar(losses, nmsks)
         update_model(optimizer, losses)
-
         log_errors(monitor, losses, nmsks, i)
 
         # Elapsed time.
@@ -53,10 +52,10 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
         log_elapsed_time(monitor, elapsed, i, "train")
 
         if val_sampler is not None and i % params["test_intv"] == 0:
-            run_validation(model, val_sampler, params["test_iter"],
+            run_validation(model_w_loss, val_sampler, params["test_iter"],
                            loss_fn, sample_spec, monitor, val_writer, i)
 
-        if i % params["avgs_intv"] == 0 or i < last_iter + params["warm_up"]-1:
+        if i % params["avgs_intv"] == 0 or i < last_iter + params["warm_up"]:
             monitor.compute_avgs(i, "train")
 
             # Displaying stats (both to console and TensorBoard)
@@ -109,41 +108,6 @@ def update_model(optimizer, losses):
     optimizer.step()
 
 
-def eval_error(preds, labels, masks, loss_fn, sample_spec):
-    """
-    Evaluates the error of the predictions according to the available
-    labels and masks
-
-    Assumes labels are ordered according to the sample_spec
-    """
-
-    label_names = sample_spec.get_labels()
-
-    assert len(label_names) == len(labels), "Mismatched labels and label names"
-    assert len(preds) == len(labels), "Mismatched preds and labels"
-
-    losses, nmsks = dict(), dict()
-
-    for (i, pred) in enumerate(preds):
-
-        label = labels[i]
-        label_name = label_names[i]
-
-        if sample_spec.has_mask(label_name):
-            mask = masks[sample_spec.get_mask_index(label_name)]
-
-            losses[label_name] = loss_fn(pred, label, mask)
-            nmsks[label_name] = mask.sum()
-
-        else:
-            losses[label_name] = loss_fn(pred, label)
-            # Wrapping the value in a torch Tensor to give a
-            #  uniform interface (particularly for the log_errors fn)
-            nmsks[label_name] = torch.Tensor((np.prod(label.size()),))
-
-    return losses, nmsks
-
-
 def params_defined(params):
     """ Checks whether all required parameters have been defined """
 
@@ -183,7 +147,7 @@ def group_sample(sample, sample_spec, phase="train"):
     return input_vars, label_vars, mask_vars
 
 
-def run_validation(model, sampler, num_iters, loss_fn,
+def run_validation(model_w_loss, sampler, num_iters, loss_fn,
                    sample_spec, monitor, writer, i):
 
     mask_names = sample_spec.get_masks()
@@ -197,12 +161,10 @@ def run_validation(model, sampler, num_iters, loss_fn,
 
             inputs, labels, masks = group_sample(sample, sample_spec, "test")
 
-            # Running forward pass
-            preds = model(*inputs)
+            # Running forward pass, evaluating loss fn
+            losses, nmsks = model_w_loss(inputs, labels, masks)
 
-            losses, nmsks = eval_error(preds, labels, masks,
-                                       loss_fn, sample_spec)
-
+            losses, nmsks = sum_to_scalar(losses, nmsks)
             log_errors(monitor, losses, nmsks, i, "test")
 
             # Elapsed time.
@@ -218,3 +180,12 @@ def run_validation(model, sampler, num_iters, loss_fn,
 
     print(f"TEST: {i} avg losses = {avg_losses} (elapsed = {avg_time} s avg)")
     print("------- END VALIDATION LOOP --------")
+
+
+def sum_to_scalar(*args):
+    """Adding losses/nmsks together that were evaluated in parallel"""
+    new_args = list()
+    for arg in args:
+        new_args.append({k: v.sum() for (k, v) in arg.items()})
+
+    return new_args
