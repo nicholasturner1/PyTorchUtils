@@ -18,7 +18,6 @@ class BinomialCrossEntropyWithLogits(nn.Module):
     """
 
     def __init__(self):
-
       nn.Module.__init__(self)
 
     def forward(self, pred, label, mask=None):

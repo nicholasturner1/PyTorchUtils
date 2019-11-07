@@ -14,7 +14,7 @@ class Sampler(torch.utils.data.IterableDataset):
     def __init__(self, datadir, spec, vols=[], mode="train", aug=None, seed=None):
         assert mode in ["train","val"], f"invalid mode: {mode}"
 
-        super(Sampler).__init__()
+        super(Sampler, self).__init__()
         self.seed = seed
         self.build(datadir, vols, spec, aug)
 
@@ -28,9 +28,9 @@ class Sampler(torch.utils.data.IterableDataset):
             np.random.seed(self.seed)
         else:
             if self.seed is not None:
-                np.random.seed(self.seed * worker_info.id)
+                np.random.seed(self.seed * (worker_info.id + 1))
             else:
-                np.random.seed(worker_info.id)
+                np.random.seed(worker_info.id + 1)
         
         return (self.sample() for _ in itertools.count())
 
