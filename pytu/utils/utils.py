@@ -162,7 +162,7 @@ def to_torch(np_arr, block=True):
 
 def masks_empty(sample, mask_names):
     """ Tests whether a sample has any non-masked values """
-    return any(not np.any(sample[name]) for name in mask_names)
+    return any(not torch.any(sample[name]) for name in mask_names)
 
 
 def init_seed(worker_id, random=False):
