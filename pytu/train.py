@@ -69,7 +69,8 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
         if i % params["chkpt_intv"] == 0 and i != last_iter:
             print("SAVE CHECKPOINT: {} iters.".format(i))
-            utils.save_chkpt(model, monitor, i, params["model_dir"],
+            utils.save_chkpt(model, monitor, optimizer, 
+                             i, params["model_dir"],
                              params["log_dir"])
 
 
