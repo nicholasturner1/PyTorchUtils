@@ -43,7 +43,7 @@ class MSELoss(nn.Module):
 
     def __init__(self, size_average=True):
         nn.Module.__init__(self)
-        self.mse = nn.MSELoss(reduce=False)
+        self.mse = nn.MSELoss(reduction='none')
         self.reduce = torch.mean if size_average else torch.sum
 
     def forward(self, pred, label, mask=None):
