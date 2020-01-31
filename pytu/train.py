@@ -59,13 +59,14 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
             monitor.compute_avgs(i, "train")
 
             # Displaying stats (both to console and TensorBoard)
-            avg_losses = {k: round(monitor.get_last_value(k, "train"), 5)
+            avg_losses = {k: monitor.get_last_value(k, "train")
                           for k in losses.keys()}
-            avg_time = round(monitor.get_last_value("iter_time", "train"), 5)
+            avg_time = monitor.get_last_value("iter_time", "train")
 
             write_averages(train_writer, avg_losses, avg_time, i)
-            print(f"iter: {i}; avg losses = {avg_losses}"
-                  f" (iter_time = {avg_time}s on avg)")
+
+            # rounding losses for display
+            print_log_output(i, avg_losses, avg_time)
 
         if i % params["chkpt_intv"] == 0 and i != last_iter:
             print("SAVE CHECKPOINT: {} iters.".format(i))
@@ -174,13 +175,24 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
             start = time.time()
 
     monitor.compute_avgs(i, "test")
-    avg_losses = {k: round(monitor.get_last_value(k, "test"), 5)
+    avg_losses = {k: monitor.get_last_value(k, "test")
                   for k in losses.keys()}
-    avg_time = round(monitor.get_last_value("iter_time", "test"), 5)
+    avg_time = monitor.get_last_value("iter_time", "test")
     write_averages(writer, avg_losses, avg_time, i)
 
-    print(f"TEST: {i} avg losses = {avg_losses} (elapsed = {avg_time} s avg)")
+    print("TEST ", end="")
+    print_log_output(i, avg_losses, avg_time)
     print("------- END VALIDATION LOOP --------")
+
+
+def print_log_output(i, avg_losses, avg_time):
+    """Printing log output to the terminal screen"""
+    print(f"iter: {i}; ", end="")
+    print("{ ", end="")
+    for (k, avg) in avg_losses.items():
+        print(f"{k}: {avg:.2e}, ", end="")
+    print("} ", end="")
+    print(f" (iter_time = {avg_time:.5f}s on avg)")
 
 
 def sum_to_scalar(*args):
