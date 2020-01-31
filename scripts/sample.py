@@ -12,18 +12,27 @@ from pytu import utils
 SAMPLE_DIRNAME = "samples"
 
 
-def main(sampler_fname, num_samples, *args, **kwargs):
-    sample_iter = load_iter(sampler_fname, *args, **kwargs)
+def main(sampler_fname, num_samples, aug_fname, val_aug, *args, **kwargs):
+    sample_iter = load_iter(sampler_fname, aug_fname, val_aug,
+                            *args, **kwargs)
 
     for i in range(num_samples):
         sample = next(sample_iter)
         write_sample(sample, i)
 
 
-def load_iter(sampler_fname, *args, **kwargs):
+def load_iter(sampler_fname, aug_fname, val_aug, *args, **kwargs):
     sampler_class = utils.load_source(sampler_fname, "S").Sampler
-    return iter(sampler_class(*args, **kwargs))
-    
+
+    if aug_fname is not None:
+        aug_constr = utils.load_source(aug_fname).get_augmentation
+        print(val_aug)
+        aug = aug_constr(not val_aug)
+        return iter(sampler_class(*args, aug=aug, **kwargs))
+
+    else:
+        return iter(sampler_class(*args, **kwargs))
+
 
 def write_sample(sample, sample_num):
     """Writes a sample (dict) as separate files for viewing"""
@@ -43,6 +52,8 @@ def parse_other_args(other_stuff):
                 args.append(eval(arg))
             except SyntaxError as e:
                 args.append(arg)  # raw string arg
+            except NameError as e:
+                args.append(arg)  # raw string arg
         else:
             fields = arg.split('=')
             assert len(fields) == 2, f"improper arg: {arg}"
@@ -57,10 +68,12 @@ if __name__ == "__main__":
     
     parser.add_argument("sampler_fname")
     parser.add_argument("num_samples", type=int)
+    parser.add_argument("--aug_fname", default=None)
+    parser.add_argument("--val_aug", action="store_true")
     parser.add_argument("other_args", nargs='*')
 
     args = parser.parse_args()
 
     sampler_args, sampler_kwargs = parse_other_args(args.other_args)
-    main(args.sampler_fname, args.num_samples,
+    main(args.sampler_fname, args.num_samples, args.aug_fname, args.val_aug,
          *sampler_args, **sampler_kwargs)
