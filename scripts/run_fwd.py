@@ -7,7 +7,7 @@ Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
 import os.path as osp
 import collections
 
-from torch.nn import functional as F
+import torch
 import dataprovider3 as dp
 
 from pytu import forward
@@ -49,7 +49,7 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["in_spec"] = dict(input=(1, 18, 160, 160))
     params["output_spec"] = collections.OrderedDict(cleft=(1, 18, 160, 160))
     params["width"] = [32, 40, 80]
-    params["activation"] = F.sigmoid
+    params["activation"] = torch.sigmoid
     params["chkpt_num"] = chkpt_num
 
     # GPUS
@@ -83,7 +83,7 @@ def fill_params(expt_name, chkpt_num, gpus,
     params["model_kwargs"] = {}
 
     # Modules used for record-keeping
-    params["modules_used"] = [__file__, model_fname, "layers.py"]
+    params["modules_used"] = [__file__, model_fname]
 
     return params
 
