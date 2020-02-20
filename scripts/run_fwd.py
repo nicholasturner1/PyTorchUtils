@@ -137,8 +137,6 @@ if __name__ == "__main__":
                         help="Checkpoint Number")
     parser.add_argument("dset_names", nargs="+",
                         help="Inference Dataset Names")
-    parser.add_argument("--nobn", action="store_true",
-                        help="Whether net uses batch normalization")
     parser.add_argument("--gpus", default=["0"], nargs="+")
     parser.add_argument("--noeval", action="store_true",
                         help="Whether to use eval version of network")
