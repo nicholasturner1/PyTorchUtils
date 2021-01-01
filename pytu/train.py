@@ -15,8 +15,9 @@ REQUIRED_PARAMS = ["max_iter", "test_intv", "test_iter",
                    "modeldir", "logdir", "batchsize", "warm_up"]
 
 
-def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
-          train_writer=None, val_writer=None, monitor=None, args=None):
+def train(model, loss_fn, optimizer, sampler, val_sampler=None,
+          last_iter=0, train_writer=None, val_writer=None,
+          monitor=None, args=None, rank=None):
     """ Generalized training function """
 
     assert params_defined(args), "Params under-specified"
@@ -30,7 +31,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
     model_w_loss = utils.wrapmodel(model, loss_fn, sample_spec)
 
-    print("======= BEGIN TRAINING LOOP ========")
+    printR0(rank, "======= BEGIN TRAINING LOOP ========")
     for i in range(last_iter, args.max_iter):
         start = time.time()
 
@@ -53,7 +54,8 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
         if val_sampler is not None and i % args.test_intv == 0:
             run_validation(model_w_loss, val_sampler, args.test_iter,
-                           loss_fn, sample_spec, monitor, val_writer, i, args)
+                           loss_fn, sample_spec, monitor, val_writer, i,
+                           args, rank)
 
         if i % args.avgs_intv == 0 or i < last_iter + args.warm_up:
             monitor.compute_avgs(i, "train")
@@ -66,10 +68,10 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
             write_averages(train_writer, avg_losses, avg_time, i)
 
             # rounding losses for display
-            print_log_output(i, avg_losses, avg_time)
+            print_log_output(i, avg_losses, avg_time, rank)
 
         if i % args.chkpt_intv == 0 and i != last_iter and args.rank == 0:
-            print("SAVE CHECKPOINT: {} iters.".format(i))
+            printR0(rank, "SAVE CHECKPOINT: {} iters.".format(i))
             utils.save_chkpt(model, monitor, optimizer, 
                              i, args.modeldir, args.logdir)
 
@@ -147,10 +149,10 @@ def group_sample(sample, sample_spec, gpu=0, phase="train"):
 
 
 def run_validation(model_w_loss, sampler, num_iters, loss_fn,
-                   sample_spec, monitor, writer, i, args):
+                   sample_spec, monitor, writer, i, args, rank):
 
     mask_names = sample_spec.get_masks()
-    print("------- BEGIN VALIDATION LOOP --------")
+    printR0(rank, "------- BEGIN VALIDATION LOOP --------")
     with torch.no_grad():
         start = time.time()
         for j in range(num_iters):
@@ -178,19 +180,19 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
     avg_time = monitor.get_last_value("iter_time", "test")
     write_averages(writer, avg_losses, avg_time, i)
 
-    print("TEST ", end="")
-    print_log_output(i, avg_losses, avg_time)
-    print("------- END VALIDATION LOOP --------")
+    printR0(rank, "TEST ", end="")
+    print_log_output(i, avg_losses, avg_time, rank)
+    printR0(rank, "------- END VALIDATION LOOP --------")
 
 
-def print_log_output(i, avg_losses, avg_time):
+def print_log_output(i, avg_losses, avg_time, rank):
     """Printing log output to the terminal screen"""
-    print(f"iter: {i}; ", end="")
-    print("{ ", end="")
+    printR0(rank, f"iter: {i}; ", end="")
+    printR0(rank, "{ ", end="")
     for (k, avg) in avg_losses.items():
-        print(f"{k}: {avg:.2e}, ", end="")
-    print("} ", end="")
-    print(f" (iter_time = {avg_time:.5f}s on avg)")
+        printR0(rank, f"{k}: {avg:.2e}, ", end="")
+    printR0(rank, "} ", end="")
+    printR0(rank, f" (iter_time = {avg_time:.5f}s on avg)")
 
 
 def sum_to_scalar(*args):
@@ -200,3 +202,7 @@ def sum_to_scalar(*args):
         new_args.append({k: v.sum() for (k, v) in arg.items()})
 
     return new_args
+
+def printR0(rank, msg, *args, **kwargs):
+    if rank == 0 or rank is None:
+        print(msg, *args, **kwargs)

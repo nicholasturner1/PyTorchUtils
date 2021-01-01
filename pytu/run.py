@@ -1,4 +1,6 @@
 import os
+import signal
+import warnings
 
 import torch
 import torch.multiprocessing as mp
@@ -16,7 +18,14 @@ def run_training(args):
     os.environ["MASTER_ADDR"] = "0.0.0.0"
     os.environ["MASTER_PORT"] = str(args.port)
 
-    mp.spawn(trainingprocess, nprocs=len(args.gpus), args=(args,))
+    # signal code allows child processes to inherit sigint handler
+    # https://stackoverflow.com/questions/11312525/catch-ctrlc-sigint-and-exit-multiprocesses-gracefully-in-python  # noqa
+    orig_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    context = mp.spawn(trainingprocess, join=False,
+                       nprocs=len(args.gpus), args=(args,))
+    signal.signal(signal.SIGINT, orig_sigint_handler)
+
+    waitforinterrupt(context)
 
 
 def trainingprocess(rank, args, torch_seed=12345):
@@ -28,7 +37,6 @@ def trainingprocess(rank, args, torch_seed=12345):
     args.rank = rank
     args.device = f"cuda:{args.gpus[rank]}"
     torch.manual_seed(torch_seed)
-    #torch.cuda.device(gpu)
 
     model = initmodel(args, args.device)
     lossfn, opt = initopt(args, model, args.device)
@@ -41,7 +49,7 @@ def trainingprocess(rank, args, torch_seed=12345):
 
     train.train(model, lossfn, opt, trainloader, valloader,
                 train_writer=trainwriter, val_writer=valwriter,
-                last_iter=args.chkptnum, monitor=monitor, args=args) #, rank=rank)
+                last_iter=args.chkptnum, monitor=monitor, args=args, rank=rank)
 
 
 def initmodel(args, device):
@@ -109,3 +117,17 @@ def initwriters(args):
     valwriter = tensorboardX.SummaryWriter(args.tb_val)
 
     return trainwriter, valwriter
+
+
+def waitforinterrupt(context):
+    try:
+        while not context.join():
+            pass
+        return
+    except KeyboardInterrupt:
+        # A warning that mentions leaked semaphores is currently
+        # unavoidable here
+        # https://www.gitmemory.com/issue/pytorch/pytorch/23117/513478582
+        for process in context.processes:
+            if process.is_alive():
+                process.terminate()
