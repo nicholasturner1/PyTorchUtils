@@ -18,38 +18,46 @@ import h5py
 
 
 __all__ = ["timestamp",
-           "make_required_dirs", "log_tagged_modules", "log_params",
+           "make_required_dirs", "log_tagged_modules", "logparams",
            "create_network", "load_network", "load_learning_monitor",
-           "save_chkpt", "load_chkpt", "iter_from_chkpt_fname",
+           "save_chkpt", "loadchkpt", "iter_from_chkpt_fname",
            "load_data", "load_source",
            "to_torch", "masks_empty",
            "read_h5", "write_h5",
-           "set_gpus", "init_seed"]
+           "set_gpus", "init_seed", "logfile"]
 
 
-def timestamp():
-    return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
+def make_required_dirs(args):
+    required_dirs = ["modeldir", "logdir", "fwddir", "tb_train", "tb_val"]
+
+    for d in required_dirs:
+        path = getattr(args, d)
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
 
-def make_required_dirs(model_dir, log_dir, fwd_dir,
-                       tb_train, tb_val, **params):
+def logfile(filename, tag, logdir=None, tstamp=None):
 
-    for d in [model_dir, log_dir, fwd_dir, tb_train, tb_val]:
-        if not os.path.isdir(d):
-            os.makedirs(d)
+    tstamp = tstamp if tstamp is not None else timestamp()
+
+    basename = os.path.basename(filename)
+    output_basename = f"{tstamp}_{tag}"
+
+    shutil.copyfile(filename, os.path.join(logdir, output_basename))
 
 
-def log_params(param_dict, tstamp=None, log_dir=None):
+def logparams(args, tstamp=None, logdir=None):
+    param_dict = vars(args)
 
-    if log_dir is None:
-        assert "log_dir" in param_dict, "log dir not specified"
-        log_dir = param_dict["log_dir"]
+    if logdir is None:
+        assert hasattr(args, "logdir"), "log dir not specified"
+        logdir = args.logdir
 
     tstamp = tstamp if tstamp is not None else timestamp()
 
     output_basename = f"{tstamp}_params.csv"
 
-    with open(os.path.join(log_dir, output_basename), "w+") as f:
+    with open(os.path.join(logdir, output_basename), "w+") as f:
         for (k, v) in param_dict.items():
             f.write(f"{k};{v}\n")
 
@@ -78,6 +86,16 @@ def save_chkpt(model, learning_monitor, opt, chkpt_num, model_dir, log_dir):
     # Save learning monitor
     lm_fname = os.path.join(log_dir, f"stats{chkpt_num}.h5")
     learning_monitor.save(lm_fname, chkpt_num)
+
+
+def initmodel(args, device):
+    modelconstr = utils.load_source(args.modelfilename,
+                                    "model", args.logdir,
+                                    args.timestamp).Model
+    basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
+
+    return torch.nn.parallel.DistributedDataParallel(
+               basemodel, device_ids=[device])
 
 
 def create_network(model_class, model_args, model_kwargs,
@@ -113,26 +131,24 @@ def load_learning_monitor(learning_monitor, chkpt_num, log_dir):
     return learning_monitor
 
 
-def load_chkpt(model, learning_monitor, opt, chkpt_num,
-               model_dir, log_dir, **params):
+def loadchkpt(model, learning_monitor, opt, args):
 
-    m = load_network(model, chkpt_num, model_dir)
-    opt = load_optimizer(opt, chkpt_num, log_dir)
-
-    lm = load_learning_monitor(learning_monitor, chkpt_num, log_dir)
+    m = load_network(model, args.chkptnum, args.modeldir)
+    opt = load_optimizer(opt, args.chkptnum, args.logdir)
+    lm = load_learning_monitor(learning_monitor, args.chkptnum, args.log_dir)
 
     return m, lm, opt
 
 
-def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
+def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
               train_sets, val_sets, batch_size, num_workers, train=True,
               **params):
     aug = augmentor_constr(train)
     if train:
-        sampler = sampler_class(data_dir, sampler_spec, train_sets,
+        sampler = sampler_class(data_dir, patchsz, train_sets,
                                 mode="train", aug=aug)
     else:
-        sampler = sampler_class(data_dir, sampler_spec, val_sets,
+        sampler = sampler_class(data_dir, patchsz, val_sets,
                                 mode="val", aug=aug)
 
     loader = DataLoader(sampler, batch_size=batch_size,
@@ -141,11 +157,15 @@ def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
     return iter(loader)
 
 
-def load_source(fname, module_name="module"):
+def load_source(fname, module_name="module", log_dir=None, tstamp=None):
     """Updated version of imp.load_source(fname)"""
     loader = importlib.machinery.SourceFileLoader(module_name, fname)
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
+
+    if log_dir is not None:
+        logfile(fname, module_name, log_dir, tstamp=tstamp)
+
     return mod
 
 
@@ -155,14 +175,14 @@ def iter_from_chkpt_fname(chkpt_fname):
     return int(re.findall(r"\d+", basename)[0])
 
 
-def to_torch(np_arr, block=True):
+def to_torch(np_arr, device, block=True):
     tensor = torch.from_numpy(np.ascontiguousarray(np_arr))
-    return tensor.cuda(non_blocking=(not block))
+    return tensor.to(device, non_blocking=(not block))
 
 
 def masks_empty(sample, mask_names):
     """ Tests whether a sample has any non-masked values """
-    return any(not torch.any(sample[name]) for name in mask_names)
+    return any(not torch.any(sample[name] != 0) for name in mask_names)
 
 
 def init_seed(worker_id, random=False):
@@ -183,7 +203,7 @@ def set_gpus(gpu_list):
 
 def read_h5(fname):
 
-    with h5py.File(fname) as f:
+    with h5py.File(fname, 'r') as f:
         d = f["/main"][()]
 
     return d
@@ -194,5 +214,76 @@ def write_h5(data, fname):
     if os.path.exists(fname):
         os.remove(fname)
 
-    with h5py.File(fname) as f:
+    with h5py.File(fname, 'w') as f:
         f.create_dataset("/main", data=data)
+
+
+def timestamp():
+    return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
+
+
+def initmodel(args, device):
+    modelconstr = utils.load_source(args.modelfilename,
+                                    "model", args.logdir,
+                                    args.timestamp).Model
+    basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
+
+    return torch.nn.parallel.DistributedDataParallel(
+               basemodel, device_ids=[device])
+
+
+def initopt(args, model, device):
+    lossconstr = utils.load_source(args.lossfilename,
+                                   "loss", args.logdir,
+                                   args.timestamp).Loss
+    loss = lossconstr(*args.lossargs, **args.losskwargs)
+
+    optconstr = utils.load_source(args.lossfilename,
+                                  "opt", args.logdir,
+                                  args.timestamp).Optimizer
+    opt = optconstr(model.parameters(), *args.optargs, **args.optkwargs)
+
+    return loss, opt
+
+
+def initloaders(args, rank):
+    augconstr = utils.load_source(args.augfilename,
+                                  "aug", args.logdir,
+                                  args.timestamp).Augmentor
+    aug = augconstr(*args.augargs, **args.augkwargs)
+
+    dsetconstr = utils.load_source(args.datasetfilename,
+                                   "dataset", args.logdir,
+                                   args.timestamp).Dataset
+    traindset = dsetconstr(*args.trainsamplerargs,
+                           **args.trainsamplerkwargs,
+                           aug=aug)
+    valdset = dsetconstr(*args.valsamplerargs,
+                         **args.valsamplerkwargs,
+                         aug=aug)
+
+    trainloader = wrapdataset(traindset, rank, args)
+    valloader = wrapdataset(valdset, rank, args)
+
+    return iter(trainloader), iter(valloader)
+
+
+def wrapdataset(dset, rank, args):
+
+    if isinstance(dset, torch.utils.data.IterableDataset):
+        # Assume that the iterable dataset already randomizes things
+        sampler = None
+    else:
+        sampler = torch.utils.data.distributed.DistributedSampler(
+                      dset, num_replicas=len(args.gpus), rank=rank)
+
+    return torch.utils.data.DataLoader(
+        dataset=dset, batch_size=args.batchsize, shuffle=False,
+        num_workers=0, pin_memory=True, sampler=sampler)
+
+
+def initwriters(args):
+    trainwriter = tensorboardX.SummaryWriter(args.tb_train)
+    valwriter = tensorboardX.SummaryWriter(args.tb_val)
+
+    return trainwriter, valwriter
