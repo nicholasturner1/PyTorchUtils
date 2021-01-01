@@ -13,6 +13,7 @@ import re
 
 import torch
 from torch.utils.data import DataLoader
+import tensorboardX
 import numpy as np
 import h5py
 
@@ -21,6 +22,7 @@ __all__ = ["timestamp",
            "make_required_dirs", "log_tagged_modules", "logparams",
            "create_network", "load_network", "load_learning_monitor",
            "save_chkpt", "loadchkpt", "iter_from_chkpt_fname",
+           "initmodel", "initloss", "initopt", "initloaders", "initwriters",
            "load_data", "load_source",
            "to_torch", "masks_empty",
            "read_h5", "write_h5",
@@ -89,9 +91,9 @@ def save_chkpt(model, learning_monitor, opt, chkpt_num, model_dir, log_dir):
 
 
 def initmodel(args, device):
-    modelconstr = utils.load_source(args.modelfilename,
-                                    "model", args.logdir,
-                                    args.timestamp).Model
+    modelconstr = load_source(args.modelfilename,
+                              "model", args.logdir,
+                              args.timestamp).Model
     basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
 
     return torch.nn.parallel.DistributedDataParallel(
@@ -114,6 +116,19 @@ def load_network(model, chkpt_num, model_dir):
     model.module.load_state_dict(torch.load(chkpt_fname))
 
     return model
+
+
+def initloss(args, device):
+    constructor = load_source(args.lossfilename,
+                              "loss", args.logdir, args.timestamp).Loss
+    return constructor(*args.lossargs, **args.losskwargs)
+
+
+def initopt(args, model, device):
+    constructor = load_source(args.lossfilename,
+                              "opt", args.logdir, args.timestamp).Optimizer
+
+    return constructor(model.parameters(), *args.optargs, **args.optkwargs)
 
 
 def load_optimizer(opt, chkpt_num, log_dir):
@@ -140,6 +155,28 @@ def loadchkpt(model, learning_monitor, opt, args):
     return m, lm, opt
 
 
+def initloaders(args, rank):
+    augconstr = load_source(args.augfilename,
+                            "aug", args.logdir,
+                            args.timestamp).Augmentor
+    aug = augconstr(*args.augargs, **args.augkwargs)
+
+    dsetconstr = load_source(args.datasetfilename,
+                             "dataset", args.logdir,
+                             args.timestamp).Dataset
+    traindset = dsetconstr(*args.trainsamplerargs,
+                           **args.trainsamplerkwargs,
+                           aug=aug)
+    valdset = dsetconstr(*args.valsamplerargs,
+                         **args.valsamplerkwargs,
+                         aug=aug)
+
+    trainloader = wrapdataset(traindset, rank, args)
+    valloader = wrapdataset(valdset, rank, args)
+
+    return iter(trainloader), iter(valloader)
+
+
 def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
               train_sets, val_sets, batch_size, num_workers, train=True,
               **params):
@@ -155,6 +192,27 @@ def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
                         num_workers=num_workers, pin_memory=True)
 
     return iter(loader)
+
+
+def wrapdataset(dset, rank, args):
+
+    if isinstance(dset, torch.utils.data.IterableDataset):
+        # Assume that the iterable dataset already randomizes things
+        sampler = None
+    else:
+        sampler = torch.utils.data.distributed.DistributedSampler(
+                      dset, num_replicas=len(args.gpus), rank=rank)
+
+    return torch.utils.data.DataLoader(
+        dataset=dset, batch_size=args.batchsize, shuffle=False,
+        num_workers=0, pin_memory=True, sampler=sampler)
+
+
+def initwriters(args):
+    trainwriter = tensorboardX.SummaryWriter(args.tb_train)
+    valwriter = tensorboardX.SummaryWriter(args.tb_val)
+
+    return trainwriter, valwriter
 
 
 def load_source(fname, module_name="module", log_dir=None, tstamp=None):
@@ -220,70 +278,3 @@ def write_h5(data, fname):
 
 def timestamp():
     return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
-
-
-def initmodel(args, device):
-    modelconstr = utils.load_source(args.modelfilename,
-                                    "model", args.logdir,
-                                    args.timestamp).Model
-    basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
-
-    return torch.nn.parallel.DistributedDataParallel(
-               basemodel, device_ids=[device])
-
-
-def initopt(args, model, device):
-    lossconstr = utils.load_source(args.lossfilename,
-                                   "loss", args.logdir,
-                                   args.timestamp).Loss
-    loss = lossconstr(*args.lossargs, **args.losskwargs)
-
-    optconstr = utils.load_source(args.lossfilename,
-                                  "opt", args.logdir,
-                                  args.timestamp).Optimizer
-    opt = optconstr(model.parameters(), *args.optargs, **args.optkwargs)
-
-    return loss, opt
-
-
-def initloaders(args, rank):
-    augconstr = utils.load_source(args.augfilename,
-                                  "aug", args.logdir,
-                                  args.timestamp).Augmentor
-    aug = augconstr(*args.augargs, **args.augkwargs)
-
-    dsetconstr = utils.load_source(args.datasetfilename,
-                                   "dataset", args.logdir,
-                                   args.timestamp).Dataset
-    traindset = dsetconstr(*args.trainsamplerargs,
-                           **args.trainsamplerkwargs,
-                           aug=aug)
-    valdset = dsetconstr(*args.valsamplerargs,
-                         **args.valsamplerkwargs,
-                         aug=aug)
-
-    trainloader = wrapdataset(traindset, rank, args)
-    valloader = wrapdataset(valdset, rank, args)
-
-    return iter(trainloader), iter(valloader)
-
-
-def wrapdataset(dset, rank, args):
-
-    if isinstance(dset, torch.utils.data.IterableDataset):
-        # Assume that the iterable dataset already randomizes things
-        sampler = None
-    else:
-        sampler = torch.utils.data.distributed.DistributedSampler(
-                      dset, num_replicas=len(args.gpus), rank=rank)
-
-    return torch.utils.data.DataLoader(
-        dataset=dset, batch_size=args.batchsize, shuffle=False,
-        num_workers=0, pin_memory=True, sampler=sampler)
-
-
-def initwriters(args):
-    trainwriter = tensorboardX.SummaryWriter(args.tb_train)
-    valwriter = tensorboardX.SummaryWriter(args.tb_val)
-
-    return trainwriter, valwriter
