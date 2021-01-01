@@ -59,21 +59,25 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("experimentname",
-                        help="Experiment name")
-    parser.add_argument("modelfilename",
-                        help="Model architecture filename")
-    parser.add_argument("datasetfilename",
-                        help="Dataset filename")
-    parser.add_argument("augfilename",
-                        help="Data augmentor module filename")
-    parser.add_argument("lossfilename",
-                        help="Loss and optimizer filename")
-    parser.add_argument("--batchsize",  type=int, default=1,
-                        help="Batch size for each sample")
-    parser.add_argument("--chkptnum", type=int, default=0,
-                        help="Checkpoint Number")
-    parser.add_argument("--gpus", default=["0"], nargs="+")
+    parser.add_argument(
+        "experimentname", help="Experiment name")
+    parser.add_argument(
+        "modelfilename", help="Model architecture filename")
+    parser.add_argument(
+        "datasetfilename", help="Dataset filename")
+    parser.add_argument(
+        "augfilename", help="Data augmentor module filename")
+    parser.add_argument(
+        "lossfilename", help="Loss and optimizer filename")
+    parser.add_argument(
+        "--batchsize", help="Batch size for each sample",
+        type=int, default=1)
+    parser.add_argument(
+        "--chkptnum", help="Checkpoint Number",
+        type=int, default=0)
+    parser.add_argument(
+        "--gpus", help="GPUs indices to use",
+        default=["0"], nargs="+")
 
     args = parser.parse_args()
 

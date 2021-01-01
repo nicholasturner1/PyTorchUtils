@@ -10,7 +10,7 @@ from . import utils
 
 
 def run_training(args):
-
+    """Sets up a processing pool and starts training within a subprocess"""
     utils.set_gpus(args.gpus)
 
     os.environ["MASTER_ADDR"] = "0.0.0.0"
@@ -27,7 +27,7 @@ def run_training(args):
 
 
 def trainingprocess(rank, args, torch_seed=12345):
-
+    """A single training process"""
     dist.init_process_group(
         backend="nccl", init_method="env://",
         world_size=len(args.gpus), rank=rank)
@@ -52,6 +52,7 @@ def trainingprocess(rank, args, torch_seed=12345):
 
 
 def waitforinterrupt(context):
+    """Ctrl+C handling"""
     try:
         while not context.join():
             pass
