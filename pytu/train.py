@@ -11,16 +11,16 @@ from . import utils
 
 
 REQUIRED_PARAMS = ["max_iter", "test_intv", "test_iter",
-                   "avgs_intv", "chkpt_intv", "expt_dir",
-                   "model_dir", "log_dir", "batch_size",
-                   "warm_up"]
+                   "avgs_intv", "chkpt_intv", "exptdir",
+                   "modeldir", "logdir", "batchsize", "warm_up"]
 
 
-def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
-          train_writer=None, val_writer=None, monitor=None, **params):
+def train(model, loss_fn, optimizer, sampler, val_sampler=None,
+          last_iter=0, train_writer=None, val_writer=None,
+          monitor=None, args=None, rank=None):
     """ Generalized training function """
 
-    assert params_defined(params), "Params under-specified"
+    assert params_defined(args), "Params under-specified"
 
     if monitor is None:
         monitor = utils.LearningMonitor()
@@ -31,14 +31,15 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
 
     model_w_loss = utils.wrapmodel(model, loss_fn, sample_spec)
 
-    print("======= BEGIN TRAINING LOOP ========")
-    for i in range(last_iter, params['max_iter']):
+    printR0(rank, "======= BEGIN TRAINING LOOP ========")
+    for i in range(last_iter, args.max_iter):
         start = time.time()
 
         # Make sure no mask is empty (data for all tasks)
         sample = fetch_nonempty_sample(sampler, mask_names)
 
-        inputs, labels, masks = group_sample(sample, sample_spec, "train")
+        inputs, labels, masks = group_sample(sample, sample_spec,
+                                             args.device, "train")
 
         # Running forward pass, evaluating loss fn
         losses, nmsks = model_w_loss(inputs, labels, masks)
@@ -51,11 +52,12 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
         elapsed = time.time() - start
         log_elapsed_time(monitor, elapsed, i, "train")
 
-        if val_sampler is not None and i % params["test_intv"] == 0:
-            run_validation(model_w_loss, val_sampler, params["test_iter"],
-                           loss_fn, sample_spec, monitor, val_writer, i)
+        if val_sampler is not None and i % args.test_intv == 0:
+            run_validation(model_w_loss, val_sampler, args.test_iter,
+                           loss_fn, sample_spec, monitor, val_writer, i,
+                           args, rank)
 
-        if i % params["avgs_intv"] == 0 or i < last_iter + params["warm_up"]:
+        if i % args.avgs_intv == 0 or i < last_iter + args.warm_up:
             monitor.compute_avgs(i, "train")
 
             # Displaying stats (both to console and TensorBoard)
@@ -66,13 +68,12 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None, last_iter=0,
             write_averages(train_writer, avg_losses, avg_time, i)
 
             # rounding losses for display
-            print_log_output(i, avg_losses, avg_time)
+            print_log_output(i, avg_losses, avg_time, rank)
 
-        if i % params["chkpt_intv"] == 0 and i != last_iter:
-            print("SAVE CHECKPOINT: {} iters.".format(i))
+        if i % args.chkpt_intv == 0 and i != last_iter and args.rank == 0:
+            printR0(rank, "SAVE CHECKPOINT: {} iters.".format(i))
             utils.save_chkpt(model, monitor, optimizer, 
-                             i, params["model_dir"],
-                             params["log_dir"])
+                             i, args.modeldir, args.logdir)
 
 
 def write_averages(writer, losses, time, i):
@@ -110,12 +111,10 @@ def update_model(optimizer, losses):
     optimizer.step()
 
 
-def params_defined(params):
+def params_defined(args):
     """ Checks whether all required parameters have been defined """
-
-    defined_keys = set(params.keys())
     for param in REQUIRED_PARAMS:
-        if param not in defined_keys:
+        if not hasattr(args, param):
             print(param)
             return False
 
@@ -135,25 +134,25 @@ def fetch_nonempty_sample(sampler, masks, num=1):
     return sample
 
 
-def group_sample(sample, sample_spec, phase="train"):
+def group_sample(sample, sample_spec, gpu=0, phase="train"):
     """ Creates the Torch tensors for a sample """
 
     inputs = sample_spec.get_inputs()
     labels = sample_spec.get_labels()
     masks = sample_spec.get_masks()
 
-    input_vars = [utils.to_torch(sample[k], block=True) for k in inputs]
-    label_vars = [utils.to_torch(sample[k], block=False) for k in labels]
-    mask_vars = [utils.to_torch(sample[k], block=False) for k in masks]
+    input_vars = [utils.to_torch(sample[k], gpu, block=False) for k in inputs]
+    label_vars = [utils.to_torch(sample[k], gpu, block=False) for k in labels]
+    mask_vars = [utils.to_torch(sample[k], gpu, block=False) for k in masks]
 
     return input_vars, label_vars, mask_vars
 
 
 def run_validation(model_w_loss, sampler, num_iters, loss_fn,
-                   sample_spec, monitor, writer, i):
+                   sample_spec, monitor, writer, i, args, rank):
 
     mask_names = sample_spec.get_masks()
-    print("------- BEGIN VALIDATION LOOP --------")
+    printR0(rank, "------- BEGIN VALIDATION LOOP --------")
     with torch.no_grad():
         start = time.time()
         for j in range(num_iters):
@@ -161,7 +160,8 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
             # Make sure no mask is empty (data for all tasks)
             sample = fetch_nonempty_sample(sampler, mask_names)
 
-            inputs, labels, masks = group_sample(sample, sample_spec, "test")
+            inputs, labels, masks = group_sample(sample, sample_spec,
+                                                 args.device, "test")
 
             # Running forward pass, evaluating loss fn
             losses, nmsks = model_w_loss(inputs, labels, masks)
@@ -180,19 +180,19 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
     avg_time = monitor.get_last_value("iter_time", "test")
     write_averages(writer, avg_losses, avg_time, i)
 
-    print("TEST ", end="")
-    print_log_output(i, avg_losses, avg_time)
-    print("------- END VALIDATION LOOP --------")
+    printR0(rank, "TEST ", end="")
+    print_log_output(i, avg_losses, avg_time, rank)
+    printR0(rank, "------- END VALIDATION LOOP --------")
 
 
-def print_log_output(i, avg_losses, avg_time):
+def print_log_output(i, avg_losses, avg_time, rank):
     """Printing log output to the terminal screen"""
-    print(f"iter: {i}; ", end="")
-    print("{ ", end="")
+    printR0(rank, f"iter: {i}; ", end="")
+    printR0(rank, "{ ", end="")
     for (k, avg) in avg_losses.items():
-        print(f"{k}: {avg:.2e}, ", end="")
-    print("} ", end="")
-    print(f" (iter_time = {avg_time:.5f}s on avg)")
+        printR0(rank, f"{k}: {avg:.2e}, ", end="")
+    printR0(rank, "} ", end="")
+    printR0(rank, f" (iter_time = {avg_time:.5f}s on avg)")
 
 
 def sum_to_scalar(*args):
@@ -202,3 +202,7 @@ def sum_to_scalar(*args):
         new_args.append({k: v.sum() for (k, v) in arg.items()})
 
     return new_args
+
+def printR0(rank, msg, *args, **kwargs):
+    if rank == 0 or rank is None:
+        print(msg, *args, **kwargs)

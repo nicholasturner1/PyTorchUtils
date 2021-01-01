@@ -13,49 +13,60 @@ import re
 
 import torch
 from torch.utils.data import DataLoader
+import tensorboardX
 import numpy as np
 import h5py
 
 
 __all__ = ["timestamp",
-           "make_required_dirs", "log_tagged_modules", "log_params",
+           "make_required_dirs", "log_tagged_modules", "logparams",
            "create_network", "load_network", "load_learning_monitor",
-           "save_chkpt", "load_chkpt", "iter_from_chkpt_fname",
-           "load_data", "load_source",
-           "to_torch", "masks_empty",
-           "read_h5", "write_h5",
-           "set_gpus", "init_seed"]
+           "save_chkpt", "loadchkpt", "load_data", "iter_from_chkpt_fname",
+           "initmodel", "initloss", "initopt", "initloaders", "initwriters",
+           "load_source", "to_torch", "masks_empty", "read_h5", "write_h5",
+           "set_gpus", "init_seed", "logfile"]
 
 
-def timestamp():
-    return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
+def make_required_dirs(args):
+    """Sets up a directory structure for the current experiment"""
+    required_dirs = ["modeldir", "logdir", "fwddir", "tb_train", "tb_val"]
+
+    for d in required_dirs:
+        path = getattr(args, d)
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
 
-def make_required_dirs(model_dir, log_dir, fwd_dir,
-                       tb_train, tb_val, **params):
+def logfile(filename, tag, logdir=None, tstamp=None):
+    "Logs a file within the log directory with a timestamp and name tag"
+    tstamp = tstamp if tstamp is not None else timestamp()
 
-    for d in [model_dir, log_dir, fwd_dir, tb_train, tb_val]:
-        if not os.path.isdir(d):
-            os.makedirs(d)
+    basename = os.path.basename(filename)
+    output_basename = f"{tstamp}_{tag}"
+
+    shutil.copyfile(filename, os.path.join(logdir, output_basename))
 
 
-def log_params(param_dict, tstamp=None, log_dir=None):
+def logparams(args, tstamp=None, logdir=None):
+    "Logs the parameters of the args object in the log directory"
+    param_dict = vars(args)
 
-    if log_dir is None:
-        assert "log_dir" in param_dict, "log dir not specified"
-        log_dir = param_dict["log_dir"]
+    if logdir is None:
+        assert hasattr(args, "logdir"), "log dir not specified"
+        logdir = args.logdir
 
     tstamp = tstamp if tstamp is not None else timestamp()
 
     output_basename = f"{tstamp}_params.csv"
 
-    with open(os.path.join(log_dir, output_basename), "w+") as f:
+    with open(os.path.join(logdir, output_basename), "w+") as f:
         for (k, v) in param_dict.items():
             f.write(f"{k};{v}\n")
 
 
 def log_tagged_modules(module_fnames, log_dir,
                        phase, chkpt_num=0, tstamp=None):
+    "Logs a set of modules in the log directory"
 
     tstamp = tstamp if tstamp is not None else timestamp()
 
@@ -67,17 +78,29 @@ def log_tagged_modules(module_fnames, log_dir,
 
 
 def save_chkpt(model, learning_monitor, opt, chkpt_num, model_dir, log_dir):
+    "Saves model parameters, optimizer state, and loss history"
     # Save model
-    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.chkpt")
+    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.pt")
     torch.save(model.module.state_dict(), chkpt_fname)
 
     # Save optimizer state
-    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.chkpt")
+    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.pt")
     torch.save(opt.state_dict(), opt_fname)
 
     # Save learning monitor
     lm_fname = os.path.join(log_dir, f"stats{chkpt_num}.h5")
     learning_monitor.save(lm_fname, chkpt_num)
+
+
+def initmodel(args, device):
+    "Initializes an instance of a PyTorch model from a source file"
+    modelconstr = load_source(args.modelfilename,
+                              "model", args.logdir,
+                              args.timestamp).Model
+    basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
+
+    return torch.nn.parallel.DistributedDataParallel(
+               basemodel, device_ids=[device])
 
 
 def create_network(model_class, model_args, model_kwargs,
@@ -92,47 +115,103 @@ def create_network(model_class, model_args, model_kwargs,
 
 
 def load_network(model, chkpt_num, model_dir):
-    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.chkpt")
+    "Loads model parameters into an intialized model"
+    chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.pt")
     model.module.load_state_dict(torch.load(chkpt_fname))
 
     return model
 
 
+def initloss(args, device):
+    "Initializes an instance of a PyTorch loss module from a source file"
+    constructor = load_source(args.lossfilename,
+                              "loss", args.logdir, args.timestamp).Loss
+    return constructor(*args.lossargs, **args.losskwargs)
+
+
+def initopt(args, model, device):
+    "Initializes an instance of a PyTorch optimizer from a source file"
+    constructor = load_source(args.lossfilename,
+                              "opt", args.logdir, args.timestamp).Optimizer
+
+    return constructor(model.parameters(), *args.optargs, **args.optkwargs)
+
+
 def load_optimizer(opt, chkpt_num, log_dir):
-    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.chkpt")
+    "Loads an optimizer state into an initialized optimizer"
+    opt_fname = os.path.join(log_dir, f"opt{chkpt_num}.pt")
     opt.load_state_dict(torch.load(opt_fname))
 
     return opt
 
 
 def load_learning_monitor(learning_monitor, chkpt_num, log_dir):
-
+    "Loads loss history"
     lm_fname = os.path.join(log_dir, f"stats{chkpt_num}.h5")
     learning_monitor.load(lm_fname)
 
     return learning_monitor
 
 
-def load_chkpt(model, learning_monitor, opt, chkpt_num,
-               model_dir, log_dir, **params):
-
-    m = load_network(model, chkpt_num, model_dir)
-    opt = load_optimizer(opt, chkpt_num, log_dir)
-
-    lm = load_learning_monitor(learning_monitor, chkpt_num, log_dir)
+def loadchkpt(model, learning_monitor, opt, args):
+    """
+    Loads network parameters, optimizer state, and loss history
+    from a saved checkpoint
+    """
+    m = load_network(model, args.chkptnum, args.modeldir)
+    opt = load_optimizer(opt, args.chkptnum, args.logdir)
+    lm = load_learning_monitor(learning_monitor, args.chkptnum, args.log_dir)
 
     return m, lm, opt
 
 
-def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
+def initloaders(args, rank):
+    "Initialize data loaders for training and validation"
+    augconstr = load_source(args.augfilename,
+                            "aug", args.logdir,
+                            args.timestamp).Augmentor
+    aug = augconstr(*args.augargs, **args.augkwargs)
+
+    dsetconstr = load_source(args.datasetfilename,
+                             "dataset", args.logdir,
+                             args.timestamp).Dataset
+    traindset = dsetconstr(*args.trainsamplerargs,
+                           **args.trainsamplerkwargs,
+                           aug=aug)
+    valdset = dsetconstr(*args.valsamplerargs,
+                         **args.valsamplerkwargs,
+                         aug=aug)
+
+    trainloader = wrapdataset(traindset, rank, args)
+    valloader = wrapdataset(valdset, rank, args)
+
+    return iter(trainloader), iter(valloader)
+
+
+def wrapdataset(dset, rank, args):
+    """Wraps a dataset into a data loader"""
+    if isinstance(dset, torch.utils.data.IterableDataset):
+        # Assume that the iterable dataset already randomizes things
+        sampler = None
+    else:
+        sampler = torch.utils.data.distributed.DistributedSampler(
+                      dset, num_replicas=len(args.gpus), rank=rank)
+
+    return torch.utils.data.DataLoader(
+        dataset=dset, batch_size=args.batchsize, shuffle=False,
+        num_workers=0, pin_memory=True, sampler=sampler)
+
+
+def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
               train_sets, val_sets, batch_size, num_workers, train=True,
               **params):
+    "Initialize data loaders for training and validation - old"
     aug = augmentor_constr(train)
     if train:
-        sampler = sampler_class(data_dir, sampler_spec, train_sets,
+        sampler = sampler_class(data_dir, patchsz, train_sets,
                                 mode="train", aug=aug)
     else:
-        sampler = sampler_class(data_dir, sampler_spec, val_sets,
+        sampler = sampler_class(data_dir, patchsz, val_sets,
                                 mode="val", aug=aug)
 
     loader = DataLoader(sampler, batch_size=batch_size,
@@ -141,28 +220,41 @@ def load_data(sampler_class, augmentor_constr, data_dir, sampler_spec,
     return iter(loader)
 
 
-def load_source(fname, module_name="module"):
+def initwriters(args):
+    "Initializes tensorboard writers"
+    trainwriter = tensorboardX.SummaryWriter(args.tb_train)
+    valwriter = tensorboardX.SummaryWriter(args.tb_val)
+
+    return trainwriter, valwriter
+
+
+def load_source(fname, module_name="module", log_dir=None, tstamp=None):
     """Updated version of imp.load_source(fname)"""
     loader = importlib.machinery.SourceFileLoader(module_name, fname)
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
+
+    if log_dir is not None:
+        logfile(fname, module_name, log_dir, tstamp=tstamp)
+
     return mod
 
 
 def iter_from_chkpt_fname(chkpt_fname):
-    """ Extracts the iteration number from a network checkpoint """
+    """Extracts the iteration number from a network checkpoint"""
     basename = os.path.basename(chkpt_fname)
     return int(re.findall(r"\d+", basename)[0])
 
 
-def to_torch(np_arr, block=True):
+def to_torch(np_arr, device, block=True):
+    """Converts a numpy array to a torch tensor on the specified device"""
     tensor = torch.from_numpy(np.ascontiguousarray(np_arr))
-    return tensor.cuda(non_blocking=(not block))
+    return tensor.to(device, non_blocking=(not block))
 
 
 def masks_empty(sample, mask_names):
     """ Tests whether a sample has any non-masked values """
-    return any(not torch.any(sample[name]) for name in mask_names)
+    return any(not torch.any(sample[name] != 0) for name in mask_names)
 
 
 def init_seed(worker_id, random=False):
@@ -182,17 +274,17 @@ def set_gpus(gpu_list):
 
 
 def read_h5(fname):
-
-    with h5py.File(fname) as f:
-        d = f["/main"][()]
-
-    return d
+    with h5py.File(fname, 'r') as f:
+        return f["/main"][()]
 
 
 def write_h5(data, fname):
-
     if os.path.exists(fname):
         os.remove(fname)
 
-    with h5py.File(fname) as f:
+    with h5py.File(fname, 'w') as f:
         f.create_dataset("/main", data=data)
+
+
+def timestamp():
+    return datetime.datetime.now().strftime("%d%m%y_%H%M%S")
