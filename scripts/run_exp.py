@@ -78,6 +78,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gpus", help="GPUs indices to use",
         default=["0"], nargs="+")
+    parser.add_argument(
+        "--port", help="Port for process coordination",
+        type=int, default=54321)
 
     args = parser.parse_args()
 
