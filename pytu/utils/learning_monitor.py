@@ -81,7 +81,7 @@ class LearningMonitor:
         if os.path.exists(fname):
             os.remove(fname)
         # Crate h5 file to save.
-        f = h5py.File(fname)
+        f = h5py.File(fname, 'w')
         # Train stats.
         for key, data in self.train.items():
             if key == "numerators" or key == "denominators":
