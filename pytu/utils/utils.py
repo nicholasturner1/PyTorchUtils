@@ -160,7 +160,7 @@ def loadchkpt(model, learning_monitor, opt, args):
     """
     m = load_network(model, args.chkptnum, args.modeldir)
     opt = load_optimizer(opt, args.chkptnum, args.logdir)
-    lm = load_learning_monitor(learning_monitor, args.chkptnum, args.log_dir)
+    lm = load_learning_monitor(learning_monitor, args.chkptnum, args.logdir)
 
     return m, lm, opt
 
