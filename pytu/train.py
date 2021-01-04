@@ -72,7 +72,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None,
 
         if i % args.chkpt_intv == 0 and i != last_iter and args.rank == 0:
             printR0(rank, "SAVE CHECKPOINT: {} iters.".format(i))
-            utils.save_chkpt(model, monitor, optimizer, 
+            utils.save_chkpt(model, monitor, optimizer,
                              i, args.modeldir, args.logdir)
 
 
@@ -153,7 +153,7 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
                    sample_spec, monitor, writer, i, args, rank):
 
     mask_names = sample_spec.get_masks()
-    printR0(rank, "------- BEGIN VALIDATION LOOP --------")
+    printR0(rank, "------ BEGIN VALIDATION LOOP -------")
     with torch.no_grad():
         start = time.time()
         for j in range(num_iters):
@@ -165,7 +165,8 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
                                                  args.device, "test")
 
             # Running forward pass, evaluating loss fn
-            losses, nmsks = model_w_loss(inputs, labels, masks)
+            losses, nmsks, preds = model_w_loss(
+                                   inputs, labels, masks, return_preds=True)
 
             losses, nmsks = sum_to_scalar(losses, nmsks)
             log_errors(monitor, losses, nmsks, i, "test")
@@ -181,9 +182,34 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
     avg_time = monitor.get_last_value("iter_time", "test")
     write_averages(writer, avg_losses, avg_time, i)
 
+    write_images(writer, inputs, preds, labels, i)
+
     printR0(rank, "TEST ", end="")
     print_log_output(i, avg_losses, avg_time, rank)
     printR0(rank, "------- END VALIDATION LOOP --------")
+
+
+def write_images(writer, inputs, preds, labels, i, sigmoid_preds=True):
+    write_images_(writer, inputs, "input", i)
+    write_images_(writer, preds, "pred", i, sigmoid=sigmoid_preds)
+    write_images_(writer, labels, "label", i)
+    writer.flush()
+
+
+def write_images_(writer, vols, vol_type, i, sigmoid=False):
+    for (j, vol) in enumerate(vols):
+        if sigmoid:
+            vol = torch.sigmoid(vol)
+
+        for k in range(vol.size(1)):
+            tag = f"{vol_type}_{j}_{k}"
+            write_image(writer, vol[0, k, ...], tag, i)
+
+
+def write_image(writer, vol, tag, i):
+    for j in range(vol.size(0)):
+        slicetag = f"{tag}/{j}"
+        writer.add_image(slicetag, vol[j:j+1, :, :], i)
 
 
 def print_log_output(i, avg_losses, avg_time, rank):
@@ -203,6 +229,7 @@ def sum_to_scalar(*args):
         new_args.append({k: v.sum() for (k, v) in arg.items()})
 
     return new_args
+
 
 def printR0(rank, msg, *args, **kwargs):
     if rank == 0 or rank is None:

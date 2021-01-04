@@ -24,9 +24,13 @@ class WrappedModel(nn.Module):
         self.loss_fn = loss_fn
         self.sample_spec = sample_spec
 
-    def forward(self, inputs, labels, masks):
+    def forward(self, inputs, labels, masks, return_preds=False):
         preds = self.model(*inputs)
-        return self.eval_error(preds, labels, masks)
+        losses, nmsks = self.eval_error(preds, labels, masks)
+        if not return_preds:
+            return losses, nmsks
+        else:
+            return losses, nmsks, preds
 
     def eval_error(self, preds, labels, masks):
         """
