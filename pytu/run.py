@@ -33,7 +33,7 @@ def trainingprocess(rank, args, torch_seed=12345):
         world_size=len(args.gpus), rank=rank)
 
     args.rank = rank
-    args.device = f"cuda:{args.gpus[rank]}"
+    args.device = f"cuda:{rank}"
     torch.manual_seed(torch_seed)
 
     model = utils.initmodel(args, args.device)

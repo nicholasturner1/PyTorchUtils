@@ -82,6 +82,7 @@ def write_averages(writer, losses, time, i):
         writer.add_scalar("Time Avg", time, i)
         for (k, v) in losses.items():
             writer.add_scalar("Loss {} Avg".format(k), v, i)
+    writer.flush()
 
 
 def log_elapsed_time(monitor, elapsed_time, i, phase="train"):

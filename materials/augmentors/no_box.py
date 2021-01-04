@@ -49,3 +49,5 @@ def get_augmentation(is_train, **kwargs):
     augs.append(FlipRotate())
 
     return Compose(augs)
+
+Augmentor = get_augmentation

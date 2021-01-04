@@ -4,6 +4,7 @@ A quick script for testing that your samples look the way you expect.
 Nicholas Turner <nturner@cs.princeton.edu>, 2017-9
 """
 import os
+import time
 import argparse
 
 from pytu import utils
@@ -17,7 +18,9 @@ def main(sampler_fname, num_samples, aug_fname, val_aug, *args, **kwargs):
                             *args, **kwargs)
 
     for i in range(num_samples):
+        start = time.time()
         sample = next(sample_iter)
+        print(f"{time.time() - start:.3f}s")
         write_sample(sample, i)
 
 

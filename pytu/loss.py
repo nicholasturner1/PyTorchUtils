@@ -19,13 +19,13 @@ class BinomialCrossEntropyWithLogits(nn.Module):
 
     def __init__(self):
       nn.Module.__init__(self)
+      self.bce = nn.BCEWithLogitsLoss(reduction="none")
 
     def forward(self, pred, label, mask=None):
 
       #Need masking for this application
       # copied from PyTorch's github repo
-      neg_abs = - pred.abs()
-      err = pred.clamp(min=0) - pred * label + (1 + neg_abs.exp()).log()
+      err = self.bce(pred, label)
 
       if mask is None:
         cost = err.sum() #/ np.prod(err.size())

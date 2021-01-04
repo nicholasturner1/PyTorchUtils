@@ -170,17 +170,18 @@ def initloaders(args, rank):
     augconstr = load_source(args.augfilename,
                             "aug", args.logdir,
                             args.timestamp).Augmentor
-    aug = augconstr(*args.augargs, **args.augkwargs)
+    trainaug = augconstr(True, *args.augargs, **args.augkwargs)
+    valaug = augconstr(False, *args.augargs, **args.augkwargs)
 
     dsetconstr = load_source(args.datasetfilename,
                              "dataset", args.logdir,
                              args.timestamp).Dataset
     traindset = dsetconstr(*args.trainsamplerargs,
                            **args.trainsamplerkwargs,
-                           aug=aug)
+                           aug=trainaug)
     valdset = dsetconstr(*args.valsamplerargs,
                          **args.valsamplerkwargs,
-                         aug=aug)
+                         aug=valaug)
 
     trainloader = wrapdataset(traindset, rank, args)
     valloader = wrapdataset(valdset, rank, args)
@@ -222,8 +223,16 @@ def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
 
 def initwriters(args):
     "Initializes tensorboard writers"
-    trainwriter = tensorboardX.SummaryWriter(args.tb_train)
-    valwriter = tensorboardX.SummaryWriter(args.tb_val)
+    rankstr = str(args.rank)
+    traindir = os.path.join(args.tb_train, rankstr)
+    valdir = os.path.join(args.tb_val, rankstr)
+    if not os.path.isdir(traindir):
+        os.makedirs(traindir)
+    if not os.path.isdir(valdir):
+        os.makedirs(valdir)
+
+    trainwriter = tensorboardX.SummaryWriter(traindir)
+    valwriter = tensorboardX.SummaryWriter(valdir)
 
     return trainwriter, valwriter
 
