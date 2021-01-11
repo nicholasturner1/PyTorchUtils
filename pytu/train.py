@@ -203,13 +203,8 @@ def write_images_(writer, vols, vol_type, i, sigmoid=False):
 
         for k in range(vol.size(1)):
             tag = f"{vol_type}_{j}_{k}"
-            write_image(writer, vol[0, k, ...], tag, i)
-
-
-def write_image(writer, vol, tag, i):
-    for j in range(vol.size(0)):
-        slicetag = f"{tag}/{j}"
-        writer.add_image(slicetag, vol[j:j+1, :, :], i)
+            writer.add_images(tag, vol[0:1, k, ...],
+                              global_step=i, dataformats="CNHW")
 
 
 def print_log_output(i, avg_losses, avg_time, rank):
