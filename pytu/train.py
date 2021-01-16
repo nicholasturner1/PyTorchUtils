@@ -38,8 +38,8 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None,
         # Make sure no mask is empty (data for all tasks)
         sample = fetch_nonempty_sample(sampler, mask_names)
 
-        inputs, labels, masks = group_sample(sample, sample_spec,
-                                             args.device, "train")
+        inputs, labels, masks = utils.group_sample(sample, sample_spec,
+                                                   args.device, "train")
 
         # Running forward pass, evaluating loss fn
         losses, nmsks = model_w_loss(inputs, labels, masks)
@@ -135,20 +135,6 @@ def fetch_nonempty_sample(sampler, masks, num=1):
     return sample
 
 
-def group_sample(sample, sample_spec, gpu=0, phase="train"):
-    """ Creates the Torch tensors for a sample """
-
-    inputs = sample_spec.get_inputs()
-    labels = sample_spec.get_labels()
-    masks = sample_spec.get_masks()
-
-    input_vars = [utils.to_torch(sample[k], gpu, block=False) for k in inputs]
-    label_vars = [utils.to_torch(sample[k], gpu, block=False) for k in labels]
-    mask_vars = [utils.to_torch(sample[k], gpu, block=False) for k in masks]
-
-    return input_vars, label_vars, mask_vars
-
-
 def run_validation(model_w_loss, sampler, num_iters, loss_fn,
                    sample_spec, monitor, writer, i, args, rank):
 
@@ -161,8 +147,8 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
             # Make sure no mask is empty (data for all tasks)
             sample = fetch_nonempty_sample(sampler, mask_names)
 
-            inputs, labels, masks = group_sample(sample, sample_spec,
-                                                 args.device, "test")
+            inputs, labels, masks = utils.group_sample(sample, sample_spec,
+                                                       args.device, "test")
 
             # Running forward pass, evaluating loss fn
             losses, nmsks, preds = model_w_loss(

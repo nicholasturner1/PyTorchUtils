@@ -27,17 +27,18 @@ def filldefaults(args):
     fillargs(args, "opt")
     fillargs(args, "aug")
     fillargs(args, "sampler")
+    fillargs(args, "dataset")
 
     # Splitting sampler args into two (if not already defined)
     fill(args, "trainsamplerargs", args.samplerargs)
     trainsamplerkwargs = copy.copy(args.samplerkwargs)
     trainsamplerkwargs["mode"] = "train"
-    trainsamplerkwargs["vols"] = args.trainsets
+    trainsamplerkwargs["vols"] = getattr(args, "trainsets", [])
     fill(args, "trainsamplerkwargs", trainsamplerkwargs)
     fill(args, "valsamplerargs", args.samplerargs)
     valsamplerkwargs = copy.copy(args.samplerkwargs)
     valsamplerkwargs["mode"] = "val"
-    valsamplerkwargs["vols"] = args.valsets
+    valsamplerkwargs["vols"] = getattr(args, "valsets", [])
     fill(args, "valsamplerkwargs", valsamplerkwargs)
 
     # For running multiple processes

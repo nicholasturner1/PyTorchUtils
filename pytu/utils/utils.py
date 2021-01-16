@@ -18,15 +18,6 @@ import numpy as np
 import h5py
 
 
-__all__ = ["timestamp",
-           "make_required_dirs", "log_tagged_modules", "logparams",
-           "create_network", "load_network", "load_learning_monitor",
-           "save_chkpt", "loadchkpt", "load_data", "iter_from_chkpt_fname",
-           "initmodel", "initloss", "initopt", "initloaders", "initwriters",
-           "load_source", "to_torch", "masks_empty", "read_h5", "write_h5",
-           "set_gpus", "init_seed", "logfile"]
-
-
 def make_required_dirs(args):
     """Sets up a directory structure for the current experiment"""
     required_dirs = ["modeldir", "logdir", "fwddir", "tb_train", "tb_val"]
@@ -92,15 +83,18 @@ def save_chkpt(model, learning_monitor, opt, chkpt_num, model_dir, log_dir):
     learning_monitor.save(lm_fname, chkpt_num)
 
 
-def initmodel(args, device):
+def initmodel(args, device, distrib=True):
     "Initializes an instance of a PyTorch model from a source file"
     modelconstr = load_source(args.modelfilename,
                               "model", args.logdir,
                               args.timestamp).Model
     basemodel = modelconstr(*args.modelargs, **args.modelkwargs).to(device)
 
-    return torch.nn.parallel.DistributedDataParallel(
-               basemodel, device_ids=[device])
+    if distrib:
+        return torch.nn.parallel.DistributedDataParallel(
+                   basemodel, device_ids=[device])
+    else:
+        return basemodel
 
 
 def create_network(model_class, model_args, model_kwargs,
@@ -114,10 +108,13 @@ def create_network(model_class, model_args, model_kwargs,
     return net
 
 
-def load_network(model, chkpt_num, model_dir):
+def load_network(model, chkpt_num, model_dir, module=True):
     "Loads model parameters into an intialized model"
     chkpt_fname = os.path.join(model_dir, f"model{chkpt_num}.pt")
-    model.module.load_state_dict(torch.load(chkpt_fname))
+    if module:
+        model.module.load_state_dict(torch.load(chkpt_fname))
+    else:
+        model.load_state_dict(torch.load(chkpt_fname))
 
     return model
 
@@ -189,8 +186,17 @@ def initloaders(args, rank):
     return iter(trainloader), iter(valloader)
 
 
+def initinferencedataset(args, wrap=True):
+    "Initialize a dataset for sample-wise validation"
+    dsetconstr = load_source(args.datasetfilename,
+                             "inferencedataset", args.logdir,
+                             args.timestamp).InferenceDataset
+
+    return dsetconstr(*args.datasetargs, **args.datasetkwargs)
+
+
 def wrapdataset(dset, rank, args):
-    """Wraps a dataset into a data loader"""
+    """Wraps a training dataset for distributed data loading"""
     if isinstance(dset, torch.utils.data.IterableDataset):
         # Assume that the iterable dataset already randomizes things
         sampler = None
@@ -255,6 +261,20 @@ def iter_from_chkpt_fname(chkpt_fname):
     return int(re.findall(r"\d+", basename)[0])
 
 
+def group_sample(sample, sample_spec, gpu=0, phase="train"):
+    """ Creates the Torch tensors for a sample """
+
+    inputs = sample_spec.get_inputs()
+    labels = sample_spec.get_labels()
+    masks = sample_spec.get_masks()
+
+    input_vars = [to_torch(sample[k], gpu, block=False) for k in inputs]
+    label_vars = [to_torch(sample[k], gpu, block=False) for k in labels]
+    mask_vars = [to_torch(sample[k], gpu, block=False) for k in masks]
+
+    return input_vars, label_vars, mask_vars
+
+
 def to_torch(np_arr, device, block=True):
     """Converts a numpy array to a torch tensor on the specified device"""
     tensor = torch.from_numpy(np.ascontiguousarray(np_arr))
@@ -291,8 +311,9 @@ def write_h5(data, fname):
     if os.path.exists(fname):
         os.remove(fname)
 
+    opts = dict(compression="gzip", compression_opts=4)
     with h5py.File(fname, 'w') as f:
-        f.create_dataset("/main", data=data)
+        f.create_dataset("/main", data=data, **opts)
 
 
 def timestamp():
