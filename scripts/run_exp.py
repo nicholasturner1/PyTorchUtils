@@ -1,7 +1,5 @@
 """
 Training Script
-
-Nicholas Turner, 2017-20
 """
 import argparse
 import os.path as osp
@@ -23,9 +21,9 @@ def addparams(args):
 
     # Sampling params
     datadir = osp.expanduser("~/seungmount/research/Nick/datasets/SNEMI3D/")
-    samplerpatchsz = (18, 160, 160)
-    samplerspec = dict(input=samplerpatchsz, cleft_label=samplerpatchsz)
-    args.samplerargs = [datadir, samplerspec]
+    patchsize = (18, 160, 160)
+    samplespec = dict(input=patchsize, cleft_label=patchsize)
+    args.datasetargs = [datadir, samplespec]
     args.trainsets = ["K_val"]
     args.valsets = ["K_val"]
 
@@ -39,7 +37,7 @@ def addparams(args):
     return args
 
 
-def main(args):
+def fillargs(args):
     """
     Adds user specified parameters to the args object, 
     sets up a few other things, and starts training
@@ -49,14 +47,10 @@ def main(args):
     utils.sanitycheck(args)
     args.timestamp = utils.timestamp()
 
-    utils.make_required_dirs(args)
-    utils.logparams(args, tstamp=args.timestamp)
-    utils.logfile(__file__, "run_exp.py", args.logdir, args.timestamp)
-
-    run.run_training(args)
+    return args
 
 
-if __name__ == "__main__":
+def parsecmdline():
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
@@ -82,6 +76,18 @@ if __name__ == "__main__":
         "--port", help="Port for process coordination",
         type=int, default=54321)
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    main(args)
+
+# Need to keep this code OUTSIDE of the __name__ block below
+# to pass the dataset module down to the DataLoader worker processes
+args = parsecmdline()
+args = fillargs(args)
+args.datasetclass = utils.inittrainingdatasetmodule(args)
+
+if __name__ == "__main__":
+    utils.make_required_dirs(args)
+    utils.logparams(args, tstamp=args.timestamp)
+    utils.logfile(__file__, "run_exp.py", args.logdir, args.timestamp)
+
+    run.run_training(args)

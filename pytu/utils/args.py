@@ -26,20 +26,24 @@ def filldefaults(args):
     fillargs(args, "loss")
     fillargs(args, "opt")
     fillargs(args, "aug")
-    fillargs(args, "sampler")
     fillargs(args, "dataset")
 
     # Splitting sampler args into two (if not already defined)
-    fill(args, "trainsamplerargs", args.samplerargs)
-    trainsamplerkwargs = copy.copy(args.samplerkwargs)
-    trainsamplerkwargs["mode"] = "train"
-    trainsamplerkwargs["vols"] = getattr(args, "trainsets", [])
-    fill(args, "trainsamplerkwargs", trainsamplerkwargs)
-    fill(args, "valsamplerargs", args.samplerargs)
-    valsamplerkwargs = copy.copy(args.samplerkwargs)
-    valsamplerkwargs["mode"] = "val"
-    valsamplerkwargs["vols"] = getattr(args, "valsets", [])
-    fill(args, "valsamplerkwargs", valsamplerkwargs)
+    fill(args, "traindsetargs", args.datasetargs)
+    traindsetkwargs = copy.copy(args.datasetkwargs)
+    traindsetkwargs["vols"] = args.trainsets
+    fill(args, "traindsetkwargs", traindsetkwargs)
+
+    fill(args, "valdsetargs", args.datasetargs)
+    valdsetkwargs = copy.copy(args.datasetkwargs)
+    valdsetkwargs["vols"] = args.valsets
+    fill(args, "valdsetkwargs", valdsetkwargs)
+
+    # Optimizer filename defaults to the loss filename
+    fill(args, "optfilename", args.lossfilename)
+
+    # Number of dataloading process (over the main process)
+    fill(args, "numworkers", 1)
 
     # For running multiple processes
     fill(args, "port", 54321)
@@ -75,9 +79,9 @@ def sanitycheck(args):
     assertargtypes(args, "loss")
     assertargtypes(args, "opt")
     assertargtypes(args, "aug")
-    assertargtypes(args, "sampler")
-    assertargtypes(args, "trainsampler")
-    assertargtypes(args, "valsampler")
+    assertargtypes(args, "dataset")
+    assertargtypes(args, "traindset")
+    assertargtypes(args, "valdset")
 
     assert isinstance(args.port, int)
     assert args.port > 0

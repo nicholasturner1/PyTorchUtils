@@ -39,7 +39,9 @@ def trainingprocess(rank, args, torch_seed=12345):
     model = utils.initmodel(args, args.device)
     lossfn = utils.initloss(args, args.device)
     opt = utils.initopt(args, model, args.device)
-    trainloader, valloader = utils.initloaders(args, rank)
+    trainaug, valaug = utils.initaugmentors(args)
+    trainloader, valloader = utils.initdataloaders(
+                                 args, rank, trainaug=trainaug, valaug=valaug)
     trainwriter, valwriter = utils.initwriters(args)
     monitor = utils.LearningMonitor()
 

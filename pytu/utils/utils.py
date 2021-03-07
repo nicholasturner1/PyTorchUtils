@@ -3,11 +3,11 @@ Miscellaneous Utils
 
 Nicholas Turner <nturner@cs.princeton.edu>, 2017
 """
-
 import importlib
 import datetime
 import shutil
 import types
+import sys
 import os
 import re
 
@@ -128,7 +128,7 @@ def initloss(args, device):
 
 def initopt(args, model, device):
     "Initializes an instance of a PyTorch optimizer from a source file"
-    constructor = load_source(args.lossfilename,
+    constructor = load_source(args.optfilename,
                               "opt", args.logdir, args.timestamp).Optimizer
 
     return constructor(model.parameters(), *args.optargs, **args.optkwargs)
@@ -162,23 +162,41 @@ def loadchkpt(model, learning_monitor, opt, args):
     return m, lm, opt
 
 
-def initloaders(args, rank):
-    "Initialize data loaders for training and validation"
+def initaugmentors(args):
     augconstr = load_source(args.augfilename,
                             "aug", args.logdir,
                             args.timestamp).Augmentor
     trainaug = augconstr(True, *args.augargs, **args.augkwargs)
     valaug = augconstr(False, *args.augargs, **args.augkwargs)
 
+    return trainaug, valaug
+
+
+def initdatasets(args, rank=None, trainaug=None, valaug=None):
     dsetconstr = load_source(args.datasetfilename,
                              "dataset", args.logdir,
-                             args.timestamp).Dataset
+                             args.timestamp).TrainingDataset
+
     traindset = dsetconstr(*args.trainsamplerargs,
                            **args.trainsamplerkwargs,
-                           aug=trainaug)
+                           aug=trainaug, rank=rank)
     valdset = dsetconstr(*args.valsamplerargs,
                          **args.valsamplerkwargs,
-                         aug=valaug)
+                         aug=valaug, rank=rank)
+
+    return traindset, valdset
+
+
+def initdataloaders(args, rank=None, trainaug=None, valaug=None):
+    "Initialize data loaders for training and validation"
+    traindset = args.datasetclass(
+                    *args.traindsetargs,
+                    **args.traindsetkwargs,
+                    aug=trainaug, rank=rank)
+    valdset = args.datasetclass(
+                    *args.valdsetargs,
+                    **args.valdsetkwargs,
+                    aug=valaug, rank=rank)
 
     trainloader = wrapdataset(traindset, rank, args)
     valloader = wrapdataset(valdset, rank, args)
@@ -205,8 +223,9 @@ def wrapdataset(dset, rank, args):
                       dset, num_replicas=len(args.gpus), rank=rank)
 
     return torch.utils.data.DataLoader(
-        dataset=dset, batch_size=args.batchsize, shuffle=False,
-        num_workers=0, pin_memory=True, sampler=sampler)
+        dataset=dset, batch_size=args.batchsize,
+        num_workers=args.numworkers, pin_memory=True, sampler=sampler,
+        )
 
 
 def load_data(sampler_class, augmentor_constr, data_dir, patchsz,
@@ -243,11 +262,21 @@ def initwriters(args):
     return trainwriter, valwriter
 
 
+def inittrainingdatasetmodule(args):
+    "Imports the dataset module, returns the TrainingDatasetClass"
+    module = load_source(args.datasetfilename, "dataset",
+                         args.logdir, args.timestamp)
+
+    return module.TrainingDataset
+
+
 def load_source(fname, module_name="module", log_dir=None, tstamp=None):
     """Updated version of imp.load_source(fname)"""
     loader = importlib.machinery.SourceFileLoader(module_name, fname)
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
+    # Allows the module to be imported by child processes
+    sys.modules[module_name] = mod
 
     if log_dir is not None:
         logfile(fname, module_name, log_dir, tstamp=tstamp)
