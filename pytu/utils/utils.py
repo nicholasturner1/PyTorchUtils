@@ -222,10 +222,17 @@ def wrapdataset(dset, rank, args):
         sampler = torch.utils.data.distributed.DistributedSampler(
                       dset, num_replicas=len(args.gpus), rank=rank)
 
-    return torch.utils.data.DataLoader(
-        dataset=dset, batch_size=args.batchsize,
-        num_workers=args.numworkers, pin_memory=True, sampler=sampler,
-        )
+    if args.numworkers > 0:
+        return torch.utils.data.DataLoader(
+            dataset=dset, batch_size=args.batchsize,
+            num_workers=args.numworkers, pin_memory=True, sampler=sampler,
+            multiprocessing_context="spawn"
+            )
+    else:
+        return torch.utils.data.DataLoader(
+            dataset=dset, batch_size=args.batchsize,
+            num_workers=args.numworkers, pin_memory=True, sampler=sampler
+            )
 
 
 def load_data(sampler_class, augmentor_constr, data_dir, patchsz,

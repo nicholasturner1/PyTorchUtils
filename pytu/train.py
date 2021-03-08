@@ -45,6 +45,10 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None,
         losses, nmsks = model_w_loss(inputs, labels, masks)
 
         losses, nmsks = sum_to_scalar(losses, nmsks)
+
+        # Need all processes to have completed their forward pass
+        # before computing the backward pass
+        torch.distributed.barrier()
         update_model(optimizer, losses)
         log_errors(monitor, losses, nmsks, i)
 
@@ -74,6 +78,7 @@ def train(model, loss_fn, optimizer, sampler, val_sampler=None,
             printR0(rank, "SAVE CHECKPOINT: {} iters.".format(i))
             utils.save_chkpt(model, monitor, optimizer,
                              i, args.modeldir, args.logdir)
+        torch.distributed.barrier()
 
 
 def write_averages(writer, losses, time, i):
@@ -143,7 +148,6 @@ def run_validation(model_w_loss, sampler, num_iters, loss_fn,
     with torch.no_grad():
         start = time.time()
         for j in range(num_iters):
-
             # Make sure no mask is empty (data for all tasks)
             sample = fetch_nonempty_sample(sampler, mask_names)
 
@@ -186,6 +190,9 @@ def write_images_(writer, vols, vol_type, i, sigmoid=False):
     for (j, vol) in enumerate(vols):
         if sigmoid:
             vol = torch.sigmoid(vol)
+
+        if len(vol.size()) != 5:
+            continue
 
         for k in range(vol.size(1)):
             tag = f"{vol_type}_{j}_{k}"
