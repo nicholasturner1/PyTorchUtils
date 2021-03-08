@@ -35,6 +35,7 @@ def trainingprocess(rank, args, torch_seed=12345):
     args.rank = rank
     args.device = f"cuda:{rank}"
     torch.manual_seed(torch_seed)
+    torch.cuda.set_device(args.device)
 
     model = utils.initmodel(args, args.device)
     lossfn = utils.initloss(args, args.device)
